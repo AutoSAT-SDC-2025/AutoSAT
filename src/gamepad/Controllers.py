@@ -171,7 +171,9 @@ class Xbox360(Gamepad):
             2: 'LT',
             3: 'RIGHT-X',
             4: 'RIGHT-Y',
-            5: 'RT'
+            5: 'RT',
+            6: 'DPAD -X',  # D-Pad Left/Right
+            7: 'DPAD -Y'  #D-Pad Up/Down
         }
         self.buttonNames = {
             0:  'A',
