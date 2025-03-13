@@ -9,12 +9,12 @@ async def calc_axis_angle(x_axis: float, y_axis: float):
 
 def calculate_hunter_throttle(controller_axis_value: float, car_type: CarType) -> float | None:
     if car_type == CarType.kart:
-        return controller_axis_value * 100
+        return -controller_axis_value * 100
     elif car_type == CarType.hunter:
-        return controller_axis_value * 1500
+        return -controller_axis_value * 1500
 
 def calculate_hunter_steering(controller_axis_value: float, car_type: CarType) -> float | None:
     if car_type == CarType.kart:
-        return controller_axis_value * 1.25
+        return -controller_axis_value * 1.25
     elif car_type == CarType.hunter:
-        return controller_axis_value * 576
+        return -controller_axis_value * 576
