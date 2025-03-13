@@ -6,4 +6,5 @@ class ControllerMapping(StrEnum):
     L_joystickY = 'LEFT-Y'
     R_joystickX = 'RIGHT-X'
     R_joystickY = 'RIGHT-Y'
-    throttle = 'RT'
+    throttle = 'LT'
+    park = 'RT'
