@@ -19,6 +19,7 @@ async def main() -> None:
         print('Controller not connected :(')
         return
 
+    await can_controller.send_control(0, True, HunterControlMode.command_mode)
     try:
         while gamepad.isConnected():
             if gamepad.beenPressed(ControllerMapping.buttonExit):
@@ -26,8 +27,11 @@ async def main() -> None:
                 break
             steering = calculate_hunter_steering(gamepad.axis(ControllerMapping.L_joystickX), CarType.hunter)
             throttle = calculate_hunter_throttle(gamepad.axis(ControllerMapping.R_joystickY), CarType.hunter)
-
-            await can_controller.send_control(0, False, HunterControlMode.command_mode)
+            if gamepad.axis(ControllerMapping.park) == 1:
+                park = False
+            else:
+                park = True
+            await can_controller.send_control(0, park, HunterControlMode.command_mode)
             await can_controller.send_movement(throttle, KartGearBox.neutral, steering)
             message = await can_controller.monitor_bus()
 
