@@ -28,9 +28,9 @@ import shutil
 import json
 from pathlib import Path
 import torch
-from models.common import DetectMultiBackend
-from utils.general import non_max_suppression, scale_boxes, check_img_size
-from utils.torch_utils import select_device
+from yolov5.models.common import DetectMultiBackend
+from yolov5.utils.general import non_max_suppression, scale_boxes, check_img_size
+from yolov5.utils.torch_utils import select_device
 import threading
 from collections import deque
 import collections
@@ -1613,7 +1613,7 @@ def main():
         throttle_task.stop()
         steering_task.stop()
         brake_task.stop()
-        
+
 
 
 if __name__ == '__main__':
@@ -1621,4 +1621,4 @@ if __name__ == '__main__':
     main()
     ##session = rt.InferenceSession('drive.onnx')
     ##main(session)
-    
+
