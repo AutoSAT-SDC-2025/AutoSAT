@@ -12,7 +12,7 @@ import can
 import struct
 
 from typing import Optional, Dict, List
-import src.control_modes.autonomous_mode.old_twente_code.video as video
+
 import sys
 import math
 
@@ -38,6 +38,7 @@ if platform.system() != "Windows":
 from models.common import DetectMultiBackend
 from utils.general import non_max_suppression, scale_boxes, check_img_size
 from utils.torch_utils import select_device
+import video as video
 
 import threading
 from collections import deque
