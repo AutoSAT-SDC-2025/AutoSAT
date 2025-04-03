@@ -1,6 +1,9 @@
 # src/control_modes/autonomous_mode/AutonomousMode.py
 import cv2
 import asyncio
+
+from typing_extensions import override
+
 from .line_detection.LineDetection import LineFollowingNavigation
 from .object_detection.ObjectDetection import ObjectDetection
 from ...car_variables import CarType, HunterControlMode, KartGearBox
@@ -18,6 +21,7 @@ class AutonomousMode(IControlMode):
         self.traffic_manager = TrafficManager()
         self.can_bus = connect_to_can_interface(0)
 
+    @override
     async def start(self):
         self.can_controller = CarCanController(self.can_bus, self.car_type)
         await self.can_controller.send_control(0, True, HunterControlMode.command_mode)
