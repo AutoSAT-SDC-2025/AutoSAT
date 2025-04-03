@@ -53,7 +53,7 @@ class ManualMode(IControlMode):
         elif self.car_type == CarType.kart:
             try:
                 while self.gamepad.isConnected():
-                    steering, throttle, park = self.car_input()
+                    steering, throttle, park = await self.car_input()
                     if steering is not None and throttle is not None and park is not None:
                         await self.can_controller.send_control(controller_break_value(self.gamepad), park, HunterControlMode.idle_mode)
                         await self.can_controller.send_movement(throttle, KartGearBox.forward, steering)
