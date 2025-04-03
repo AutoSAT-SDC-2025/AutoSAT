@@ -26,12 +26,11 @@ class ManualMode(IControlMode):
     async def car_input(self):
         if self.gamepad.beenPressed(ControllerMapping.buttonExit):
             print("exiting....")
-            self.stop()
-            return None
+            await self.stop()
+            return None, None, None
         steering = calculate_steering(self.gamepad.axis(ControllerMapping.L_joystickX), self.car_type)
         throttle = calculate_throttle(self.gamepad.axis(ControllerMapping.R_joystickY), self.car_type)
         park = dead_man_switch(self.gamepad)
-
         return steering, throttle, park
 
     async def start(self) -> None:
@@ -65,12 +64,12 @@ class ManualMode(IControlMode):
                 self.gamepad.disconnect()
 
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         if self.car_type == CarType.hunter:
-            self.can_controller.send_control(0, True, HunterControlMode.idle_mode)
+            await self.can_controller.send_control(0, True, HunterControlMode.idle_mode)
         else:
-            self.can_controller.send_control(100, True, HunterControlMode.idle_mode)
-            self.can_controller.send_movement(0, KartGearBox.neutral, 0)
+            await self.can_controller.send_control(100, True, HunterControlMode.idle_mode)
+            await self.can_controller.send_movement(0, KartGearBox.neutral, 0)
         self.can_bus.shutdown()
         print("Stopping manual mode")
 
