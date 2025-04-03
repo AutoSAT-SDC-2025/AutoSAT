@@ -1,4 +1,3 @@
-import numpy
 from src.car_variables import CarType
 
 def calculate_throttle(controller_axis_value: float, car_type: CarType) -> float | None:
