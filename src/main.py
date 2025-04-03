@@ -1,44 +1,18 @@
 import asyncio
-from src.gamepad import Gamepad
-from src.misc import calc_axis_angle, calculate_hunter_throttle, calculate_hunter_steering
-from src.gamepad.controller_mapping import ControllerMapping
-from src.can_interface.can_controller import CarCanController, CarType, HunterControlMode
-from src.can_interface.bus_connection import connect_to_can_interface
-from car_variables import KartGearBox
+from src.control_modes.autonomous_mode.old_twente_code import go, new_go
+from src.control_modes.manual_mode.manual_mode import ManualMode
 
-async def main() -> None:
 
-    can_bus = connect_to_can_interface(0)
-    can_controller = CarCanController(can_bus, CarType.hunter)
+async def main():
+    mode = input("Which mode do you want to launch. 1 for manual, 2 for autonomous: ")
+    car = input("Which car are we using: 0 for kart, 1 for hunter: ")
+    manual = ManualMode(int(car))
 
-    if Gamepad.available():
-        print("Connected to Gamepad")
-        gamepad = Gamepad.Xbox360()
-        gamepad.startBackgroundUpdates()
-    else:
-        print('Controller not connected :(')
-        return
-
-    await can_controller.send_control(0, True, HunterControlMode.command_mode)
-    try:
-        while gamepad.isConnected():
-            if gamepad.beenPressed(ControllerMapping.buttonExit):
-                print("exiting....")
-                break
-            steering = calculate_hunter_steering(gamepad.axis(ControllerMapping.L_joystickX), CarType.hunter)
-            throttle = calculate_hunter_throttle(gamepad.axis(ControllerMapping.R_joystickY), CarType.hunter)
-            if gamepad.axis(ControllerMapping.park) == 1:
-                park = False
-            else:
-                park = True
-            await can_controller.send_control(0, park, HunterControlMode.command_mode)
-            await can_controller.send_movement(throttle, KartGearBox.neutral, steering)
-            message = await can_controller.monitor_bus()
-
-            print(f"{steering} \t {throttle} \t {message}")
-            # print(f"{steering} \t {throttle}")
-    finally:
-        gamepad.disconnect()
+    if mode == "1":
+        await manual.start()
+    elif mode == "2":
+        new_go.main()
+    # go.main()
 
 if __name__ == "__main__":
     asyncio.run(main())
