@@ -28,13 +28,21 @@ from line_detection import getLines, newLines, splitLines, findTarget
 from object_detection import initialize, traffic_object_detection, adjust_throttle
 
 
+from src.can_interface.can_factory import CanControllerFactory
+from src.can_interface.bus_connection import connect_to_can_interface, disconnect_from_can_interface
+from src.car_variables import CarType, KartGearBox
+
+
 def main():
     """
     Main loop of the self-driving car, populates the frame queue and writes to the self-driving car its steering and
     throttle, it also initializes everything that is needed.
     """
     # Initialize CAN bus
-    bus = initialize_can()
+    # bus = initialize_can()
+    bus = connect_to_can_interface(0)
+    car_type = CarType.hunter
+    can_controller = CanControllerFactory.create_can_controller(bus, car_type)
 
     # Initialize cameras
     cameras = initialize_cameras()
@@ -97,15 +105,15 @@ def main():
     print("Object detection threads started...")
 
     try:
-        # Define CAN messages
-        brake_msg = can.Message(arbitration_id=0x110, is_extended_id=False, data=[0, 0, 0, 0, 0, 0, 0, 0])
-        brake_task = bus.send_periodic(brake_msg, CAN_MSG_SENDING_SPEED)
-        steering_msg = can.Message(arbitration_id=0x220, is_extended_id=False, data=[0, 0, 0, 0, 0, 0, 0, 0])
-        steering_task = bus.send_periodic(steering_msg, CAN_MSG_SENDING_SPEED)
-        throttle_msg = can.Message(arbitration_id=0x330, is_extended_id=False, data=[0, 0, 0, 0, 0, 0, 0, 0])
-        throttle_task = bus.send_periodic(throttle_msg, CAN_MSG_SENDING_SPEED)
-
-        time.sleep(2)
+        # # Define CAN messages
+        # brake_msg = can.Message(arbitration_id=0x110, is_extended_id=False, data=[0, 0, 0, 0, 0, 0, 0, 0])
+        # brake_task = bus.send_periodic(brake_msg, CAN_MSG_SENDING_SPEED)
+        # steering_msg = can.Message(arbitration_id=0x220, is_extended_id=False, data=[0, 0, 0, 0, 0, 0, 0, 0])
+        # steering_task = bus.send_periodic(steering_msg, CAN_MSG_SENDING_SPEED)
+        # throttle_msg = can.Message(arbitration_id=0x330, is_extended_id=False, data=[0, 0, 0, 0, 0, 0, 0, 0])
+        # throttle_task = bus.send_periodic(throttle_msg, CAN_MSG_SENDING_SPEED)
+        #
+        # time.sleep(2)
 
         # Start running
         start_time = time.time()
@@ -176,7 +184,13 @@ def main():
                 car_spotted = throttle_state['car in range']
                 kill_object_detection = throttle_state['kill object detection']
 
-            throttle_msg.data = [throttle_index, 0, 1, 0, 0, 0, 0, 0]
+            if car_type is CarType.hunter:
+                can_controller.set_throttle(throttle_index)
+            elif car_type is CarType.kart:
+                can_controller.set_kart_gearbox(KartGearBox.forward)
+                can_controller.set_throttle(throttle_index)
+            throttle_msg_data=[throttle_index, 0, 1, 0, 0, 0, 0, 0]
+            # throttle_msg.data = [throttle_index, 0, 1, 0, 0, 0, 0, 0]
 
             # Steering part
             lines = getLines(frame)
@@ -216,26 +230,45 @@ def main():
 
                 if target is False:
                     print("ERROR, NO LINES FOUND")
-                    throttle_msg.data = [1, 0, 1, 0, 0, 0, 0, 0]
+                    throttle_msg_data = [1, 0, 1, 0, 0, 0, 0, 0]
                     steer_angle = 0
                 else:
                     Error = target - width / 2
                     steer_angle = min(Error / (width / 2), 1.05) if Error > 0 else max(Error / (width / 2), -1.05)
             else:
                 print("ERROR, NO LINES FOUND")
-                throttle_msg.data = [1, 0, 1, 0, 0, 0, 0, 0]
+                throttle_msg_data = [1, 0, 1, 0, 0, 0, 0, 0]
                 steer_angle = 0
 
-            steering_msg.data = list(bytearray(struct.pack("f", float(steer_angle)))) + [0] * 4
-            steering_task.modify_data(steering_msg)
-            throttle_task.modify_data(throttle_msg)
+            # steering_msg.data = list(bytearray(struct.pack("f", float(steer_angle)))) + [0] * 4
+            # steering_task.modify_data(steering_msg)
+            # throttle_task.modify_data(throttle_msg)
+            if car_type is CarType.hunter:
+                can_controller.set_throttle(throttle_msg_data[0])
+                can_controller.set_steering(steer_angle)
+            elif car_type is CarType.kart:
+                can_controller.set_kart_gearbox(KartGearBox.forward)
+                can_controller.set_throttle(throttle_msg_data[0])
+                can_controller.set_steering(steer_angle)
 
-            if throttle_msg.data[0] == 0:
-                brake_msg.data = [50, 0, 1, 0, 0, 0, 0, 0]
-                brake_task.modify_data(brake_msg)
+
+            # if throttle_msg.data[0] == 0:
+            #     brake_msg.data = [50, 0, 1, 0, 0, 0, 0, 0]
+            #     brake_task.modify_data(brake_msg)
+            # else:
+            #     brake_msg.data = [0, 0, 1, 0, 0, 0, 0, 0]
+            #     brake_task.modify_data(brake_msg)
+
+            if throttle_msg_data[0] == 0:
+                brake_msg_data = [50, 0, 1, 0, 0, 0, 0, 0]
             else:
-                brake_msg.data = [0, 0, 1, 0, 0, 0, 0, 0]
-                brake_task.modify_data(brake_msg)
+                brake_msg_data = [0, 0, 1, 0, 0, 0, 0, 0]
+
+            if car_type is CarType.hunter:
+                can_controller.set_throttle(-0.5*throttle_msg_data[0])
+            elif car_type is CarType.kart:
+                can_controller.set_break(brake_msg_data[0])
+
 
             frame_count += 1
 
@@ -263,9 +296,9 @@ def main():
         image_worker.stop()
         can_worker.stop()
 
-        brake_task.stop()
-        steering_task.stop()
-        throttle_task.stop()
+        # brake_task.stop()
+        # steering_task.stop()
+        # throttle_task.stop()
 
 
 if __name__ == '__main__':
