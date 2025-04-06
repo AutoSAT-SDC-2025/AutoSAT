@@ -1,8 +1,8 @@
 import logging
 
 from ..IControlMode import IControlMode
-from ...can_interface.bus_connection import connect_to_can_interface
-from ...can_interface.can_controller import CarCanController
+from ...can_interface.bus_connection import connect_to_can_interface, disconnect_from_can_interface
+from ...can_interface.can_factory import CanControllerFactory
 from ...car_variables import CarType, HunterControlMode, KartGearBox
 from ...gamepad import Gamepad
 from ...gamepad.controller_mapping import ControllerMapping
@@ -13,7 +13,7 @@ class ManualMode(IControlMode):
     def __init__(self, car_type: CarType):
         self.can_bus = connect_to_can_interface(0)
         self.car_type = car_type
-        self.can_controller = CarCanController(self.can_bus, self.car_type)
+        self.can_controller = CanControllerFactory.create_can_controller(self.can_bus, self.car_type)
 
         if Gamepad.available():
             print("Connected to Gamepad")
@@ -34,43 +34,38 @@ class ManualMode(IControlMode):
         return steering, throttle, park
 
     async def start(self) -> None:
-        if self.car_type == CarType.hunter:
-            await self.can_controller.send_control(0, True, HunterControlMode.command_mode)
-            try:
-                while self.gamepad.isConnected():
-                    steering, throttle, park = await self.car_input()
-                    if steering is not None and throttle is not None and park is not None:
-                        await self.can_controller.send_control(0, park, HunterControlMode.command_mode)
-                        await self.can_controller.send_movement(throttle, KartGearBox.neutral, steering)
-                        message = await self.can_controller.monitor_bus()
-                        print(f"{steering} \t {throttle} \t {message}")
-                    else:
-                        break
-            finally:
-                self.gamepad.disconnect()
+        try:
+            if self.car_type == CarType.hunter:
+                await self.can_controller.set_control_mode(HunterControlMode.command_mode)
+            elif self.car_type == CarType.kart:
+                await self.can_controller.set_kart_gearbox(KartGearBox.forward)
 
-        elif self.car_type == CarType.kart:
-            try:
-                while self.gamepad.isConnected():
-                    steering, throttle, park = await self.car_input()
-                    if steering is not None and throttle is not None and park is not None:
-                        await self.can_controller.send_control(controller_break_value(self.gamepad), park, HunterControlMode.idle_mode)
-                        await self.can_controller.send_movement(throttle, KartGearBox.forward, steering)
-                        message = await self.can_controller.monitor_bus()
-                        print(f"{steering} \t {throttle} \t {message}")
-                    else:
-                        break
-            finally:
-                self.gamepad.disconnect()
+            while self.gamepad.isConnected():
+                steering, throttle, park = await self.car_input()
+                if steering is not None and throttle is not None and park is not None:
+                    if self.car_type == CarType.hunter:
+                        await self.can_controller.set_throttle(throttle)
+                        await self.can_controller.set_steering(steering)
+                        await self.can_controller.set_parking_mode(park)
+                    elif self.car_type == CarType.kart:
+                        await self.can_controller.set_throttle(throttle)
+                        await self.can_controller.set_steering(steering)
+                        await self.can_controller.set_break(controller_break_value(self.gamepad))
+                    print(f"{steering} \t {throttle}")
+                else:
+                    break
+        finally:
+            await self.stop()
 
 
     async def stop(self) -> None:
+        self.gamepad.disconnect()
         if self.car_type == CarType.hunter:
-            await self.can_controller.send_control(0, True, HunterControlMode.idle_mode)
+            await self.can_controller.set_control_mode(HunterControlMode.idle_mode)
         else:
-            await self.can_controller.send_control(100, True, HunterControlMode.idle_mode)
-            await self.can_controller.send_movement(0, KartGearBox.neutral, 0)
-        self.can_bus.shutdown()
+            await self.can_controller.set_kart_gearbox(KartGearBox.neutral)
+            await self.can_controller.set_break(100)
+        disconnect_from_can_interface(self.can_bus)
         print("Stopping manual mode")
 
 def dead_man_switch(gamepad: Gamepad) -> bool:
@@ -83,4 +78,4 @@ def dead_man_switch(gamepad: Gamepad) -> bool:
     return park
 
 def controller_break_value(gamepad: Gamepad) -> int:
-    return -(gamepad.axis(ControllerMapping.park)**3)*100
+    return max(0,-round((gamepad.axis(ControllerMapping.park)**3)*100))
