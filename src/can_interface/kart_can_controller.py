@@ -8,8 +8,8 @@ class KartCANController(ICanController):
     can_bus: can.Bus
     __listeners: dict[int, list[callable]]
 
-    def __init__(self, can_bus: can.Bus) -> None:
-        self.can_bus = can_bus
+    def __init__(self, bus: can.Bus) -> None:
+        self.can_bus = bus
         self.__listeners = {}
 
         self.__kart_gearbox = KartGearBox.neutral
