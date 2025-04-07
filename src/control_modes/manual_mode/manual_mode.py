@@ -3,7 +3,7 @@ import logging
 from ..IControlMode import IControlMode
 from ...can_interface.bus_connection import connect_to_can_interface, disconnect_from_can_interface
 from ...can_interface.can_factory import CanControllerFactory
-from ...car_variables import CarType, HunterControlMode, KartGearBox
+from ...car_variables import CarType, HunterControlMode, KartGearBox, HunterFeedbackCanIDs, KartFeedbackCanIDs
 from ...gamepad import Gamepad
 from ...gamepad.controller_mapping import ControllerMapping
 from ...misc import calculate_steering, calculate_throttle
@@ -44,10 +44,16 @@ class ManualMode(IControlMode):
                 steering, throttle, park = await self.car_input()
                 if steering is not None and throttle is not None and park is not None:
                     if self.car_type == CarType.hunter:
+                        self.can_controller.add_listener(HunterFeedbackCanIDs.movement_feedback, print_can_messages)
+                        self.can_controller.add_listener(HunterFeedbackCanIDs.status_feedback, print_can_messages)
                         await self.can_controller.set_throttle(throttle)
                         await self.can_controller.set_steering(steering)
                         await self.can_controller.set_parking_mode(park)
                     elif self.car_type == CarType.kart:
+                        self.can_controller.add_listener(KartFeedbackCanIDs.steering_ecu, print_can_messages)
+                        self.can_controller.add_listener(KartFeedbackCanIDs.steering_sensor, print_can_messages)
+                        self.can_controller.add_listener(KartFeedbackCanIDs.breaking_sensor, print_can_messages)
+                        self.can_controller.add_listener(KartFeedbackCanIDs.internal_throttle, print_can_messages)
                         await self.can_controller.set_throttle(throttle)
                         await self.can_controller.set_steering(steering)
                         await self.can_controller.set_break(controller_break_value(self.gamepad))
@@ -79,3 +85,6 @@ def dead_man_switch(gamepad: Gamepad) -> bool:
 
 def controller_break_value(gamepad: Gamepad) -> int:
     return max(0,-round((gamepad.axis(ControllerMapping.park)**3)*100))
+
+def print_can_messages(message) -> None:
+    print(f"Throttle: {message}\t")
