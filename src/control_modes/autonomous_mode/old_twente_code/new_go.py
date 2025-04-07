@@ -1,3 +1,4 @@
+import asyncio
 import sys
 import cv2
 import os
@@ -33,7 +34,7 @@ from src.can_interface.bus_connection import connect_to_can_interface, disconnec
 from src.car_variables import CarType, KartGearBox
 
 
-def main():
+async def main():
     """
     Main loop of the self-driving car, populates the frame queue and writes to the self-driving car its steering and
     throttle, it also initializes everything that is needed.
@@ -185,10 +186,10 @@ def main():
                 kill_object_detection = throttle_state['kill object detection']
 
             if car_type is CarType.hunter:
-                can_controller.set_throttle(throttle_index)
+                await can_controller.set_throttle(throttle_index)
             elif car_type is CarType.kart:
-                can_controller.set_kart_gearbox(KartGearBox.forward)
-                can_controller.set_throttle(throttle_index)
+                await can_controller.set_kart_gearbox(KartGearBox.forward)
+                await can_controller.set_throttle(throttle_index)
             throttle_msg_data=[throttle_index, 0, 1, 0, 0, 0, 0, 0]
             # throttle_msg.data = [throttle_index, 0, 1, 0, 0, 0, 0, 0]
 
@@ -244,12 +245,12 @@ def main():
             # steering_task.modify_data(steering_msg)
             # throttle_task.modify_data(throttle_msg)
             if car_type is CarType.hunter:
-                can_controller.set_throttle(throttle_msg_data[0])
-                can_controller.set_steering(steer_angle)
+                await can_controller.set_throttle(throttle_msg_data[0])
+                await can_controller.set_steering(steer_angle)
             elif car_type is CarType.kart:
-                can_controller.set_kart_gearbox(KartGearBox.forward)
-                can_controller.set_throttle(throttle_msg_data[0])
-                can_controller.set_steering(steer_angle)
+                await can_controller.set_kart_gearbox(KartGearBox.forward)
+                await can_controller.set_throttle(throttle_msg_data[0])
+                await can_controller.set_steering(steer_angle)
 
 
             # if throttle_msg.data[0] == 0:
@@ -265,9 +266,9 @@ def main():
                 brake_msg_data = [0, 0, 1, 0, 0, 0, 0, 0]
 
             if car_type is CarType.hunter:
-                can_controller.set_throttle(-0.5*throttle_msg_data[0])
+                await can_controller.set_throttle(-0.5*throttle_msg_data[0])
             elif car_type is CarType.kart:
-                can_controller.set_break(brake_msg_data[0])
+                await can_controller.set_break(brake_msg_data[0])
 
 
             frame_count += 1
@@ -302,4 +303,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
