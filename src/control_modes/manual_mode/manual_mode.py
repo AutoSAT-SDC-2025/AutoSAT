@@ -74,7 +74,8 @@ class ManualMode(IControlMode):
 
 
     async def stop(self) -> None:
-        self.gamepad.disconnect()
+        if hasattr(self, 'gamepad') and self.gamepad.isConnected():
+            self.gamepad.disconnect()
         if self.car_type == CarType.hunter:
             await self.can_controller.set_control_mode(HunterControlMode.idle_mode)
         else:
