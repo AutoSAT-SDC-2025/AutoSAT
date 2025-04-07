@@ -29,7 +29,7 @@ from line_detection import getLines, newLines, splitLines, findTarget
 from object_detection import initialize, traffic_object_detection, adjust_throttle
 
 
-from src.can_interface.can_factory import CanControllerFactory
+from src.can_interface.can_factory import select_can_controller_creator, create_can_controller
 from src.can_interface.bus_connection import connect_to_can_interface, disconnect_from_can_interface
 from src.car_variables import CarType, KartGearBox
 
@@ -43,7 +43,8 @@ async def main():
     # bus = initialize_can()
     bus = connect_to_can_interface(0)
     car_type = CarType.hunter
-    can_controller = CanControllerFactory.create_can_controller(bus, car_type)
+    can_creator = select_can_controller_creator(car_type)
+    can_controller = create_can_controller(can_creator, bus)
 
     # Initialize cameras
     cameras = initialize_cameras()
