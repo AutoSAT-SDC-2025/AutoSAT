@@ -2,7 +2,7 @@ import logging
 
 from ..IControlMode import IControlMode
 from ...can_interface.bus_connection import connect_to_can_interface, disconnect_from_can_interface
-from ...can_interface.can_factory import CanControllerFactory
+from ...can_interface.can_factory import select_can_controller_creator, create_can_controller
 from ...car_variables import CarType, HunterControlMode, KartGearBox, HunterFeedbackCanIDs, KartFeedbackCanIDs
 from ...gamepad import Gamepad
 from ...gamepad.controller_mapping import ControllerMapping
@@ -13,7 +13,8 @@ class ManualMode(IControlMode):
     def __init__(self, car_type: CarType):
         self.can_bus = connect_to_can_interface(0)
         self.car_type = car_type
-        self.can_controller = CanControllerFactory.create_can_controller(self.can_bus, self.car_type)
+        can_creator = select_can_controller_creator(self.car_type)
+        self.can_controller = create_can_controller(can_creator, self.can_bus)
 
         if Gamepad.available():
             print("Connected to Gamepad")
