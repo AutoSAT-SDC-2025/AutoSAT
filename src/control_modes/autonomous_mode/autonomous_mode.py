@@ -1,9 +1,5 @@
 # src/control_modes/autonomous_mode/AutonomousMode.py
 import cv2
-import asyncio
-
-from typing_extensions import override
-
 from .line_detection.LineDetection import LineFollowingNavigation
 from .object_detection.ObjectDetection import ObjectDetection
 from ...car_variables import CarType, HunterControlMode, KartGearBox
@@ -21,15 +17,13 @@ class AutonomousMode(IControlMode):
         self.traffic_manager = TrafficManager()
         self.can_bus = connect_to_can_interface(0)
 
-    @override
     async def start(self):
         self.can_controller = CarCanController(self.can_bus, self.car_type)
         await self.can_controller.send_control(0, True, HunterControlMode.command_mode)
-        cap = cv2.VideoCapture('../../../assets/trash.mp4')
+        cap = cv2.VideoCapture('../../../assets/default.mp4')
         if not cap.isOpened():
             print("Error: Could not open video file.")
             return
-
         try:
             while True:
                 ret, frame = cap.read()
@@ -53,5 +47,5 @@ class AutonomousMode(IControlMode):
         await self.can_controller.send_control(0 if self.car_type == CarType.hunter else 100, True, HunterControlMode.idle_mode)
         if self.car_type != CarType.hunter:
             await self.can_controller.send_movement(0, KartGearBox.neutral, 0)
-        self.can_bus.shutdown()
+        self.can_bus.shutown()
         print("Stopping autonomous mode.")

@@ -5,6 +5,7 @@ from queue import Queue
 import numpy as np
 from PIL import Image, ImageDraw
 
+
 class ImageWorker:
     """
     A worker that writes images to disk.
@@ -29,6 +30,7 @@ class ImageWorker:
             filename, image_type, image = self.queue.get()
             cv2.imwrite(os.path.join(self.folder, image_type, f'{filename}.png'), image)
             self.queue.task_done()
+
 
 def getColorMask(imghsv):
     """
@@ -81,14 +83,14 @@ def filterWhite(img_masked):
     for row in range(round((img_masked.shape[0] - hstart) / window_size)):
         for col in range(round((img_masked.shape[1] - 2 * sidemargin) / window_size)):
             window = img_masked[
-                     row * window_size + hstart : row * window_size + window_size + hstart,
-                     col * window_size + sidemargin : col * window_size + window_size + sidemargin,
+                     row * window_size + hstart: row * window_size + window_size + hstart,
+                     col * window_size + sidemargin: col * window_size + window_size + sidemargin,
                      ]
             density = np.mean(window)
             if density > 45:
                 mask[
-                row * window_size + hstart : row * window_size + window_size + hstart,
-                col * window_size + sidemargin : col * window_size + window_size + sidemargin,
+                row * window_size + hstart: row * window_size + window_size + hstart,
+                col * window_size + sidemargin: col * window_size + window_size + sidemargin,
                 ] = np.zeros([window_size, window_size])
 
     img_masked = cv2.bitwise_and(img_masked, mask)
@@ -112,7 +114,7 @@ def filterContours(img):
         x1, y1, w, h = cv2.boundingRect(cnt)
         w = max(w, 20)
         h = max(h, 20)
-        rect = img_dil[y1 : y1 + h, x1 : x1 + w]
+        rect = img_dil[y1: y1 + h, x1: x1 + w]
         density = np.mean(rect)
         th = 50
         if w < th and h < th:

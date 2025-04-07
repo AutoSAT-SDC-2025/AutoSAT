@@ -247,7 +247,7 @@ class LineFollowingNavigation:
 
 if __name__ == "__main__":
     nav = LineFollowingNavigation(width=848, height=480)
-    cap = cv2.VideoCapture("../../../../assets/trash.mp4")
+    cap = cv2.VideoCapture("../../../../assets/default.mp4")
 
     if not cap.isOpened():
         print("Error: Could not open video file.")
