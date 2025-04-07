@@ -20,7 +20,7 @@ async def main():
     if mode == "1":
         await manual.start()
     elif mode == "2":
-        new_go.main()
+        await new_go.main()
     # go.main()
 
 if __name__ == "__main__":
