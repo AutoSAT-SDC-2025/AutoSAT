@@ -187,7 +187,8 @@ async def main():
                 kill_object_detection = throttle_state['kill object detection']
 
             if car_type is CarType.hunter:
-                await can_controller.set_throttle(throttle_index)
+                # await can_controller.set_throttle(throttle_index)
+                await can_controller.set_steering_and_throttle(0.0,throttle_index)
             elif car_type is CarType.kart:
                 await can_controller.set_kart_gearbox(KartGearBox.forward)
                 await can_controller.set_throttle(throttle_index)
@@ -246,8 +247,9 @@ async def main():
             # steering_task.modify_data(steering_msg)
             # throttle_task.modify_data(throttle_msg)
             if car_type is CarType.hunter:
-                await can_controller.set_throttle(throttle_msg_data[0])
-                await can_controller.set_steering(steer_angle)
+                # await can_controller.set_throttle(throttle_msg_data[0])
+                # await can_controller.set_steering(steer_angle)
+                await can_controller.set_steering_and_throttle(steer_angle, throttle_msg_data[0])
             elif car_type is CarType.kart:
                 await can_controller.set_kart_gearbox(KartGearBox.forward)
                 await can_controller.set_throttle(throttle_msg_data[0])
@@ -267,7 +269,8 @@ async def main():
                 brake_msg_data = [0, 0, 1, 0, 0, 0, 0, 0]
 
             if car_type is CarType.hunter:
-                await can_controller.set_throttle(-0.5*throttle_msg_data[0])
+                # await can_controller.set_throttle(-0.5*throttle_msg_data[0])
+                await can_controller.set_steering_and_throttle(0.0, -0.5*throttle_msg_data[0])
             elif car_type is CarType.kart:
                 await can_controller.set_break(brake_msg_data[0])
 
