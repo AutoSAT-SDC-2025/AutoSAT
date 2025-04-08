@@ -1,4 +1,4 @@
-# src/control_modes/autonomous_mode/AutonomousMode.py
+import asyncio
 import cv2
 from .line_detection.LineDetection import LineFollowingNavigation
 from .object_detection.ObjectDetection import ObjectDetection
@@ -31,12 +31,19 @@ class AutonomousMode(IControlMode):
                     break
 
                 steering_angle, speed, viz_img, end_x = self.nav.process(frame)
+
                 traffic_state, detections = self.object_detector.process(frame)
                 saw_red_light = traffic_state['red_light']
                 speed_limit = traffic_state['speed_limit']
-                print(f"Traffic State: {traffic_state}, Saw Red Light: {saw_red_light}, Speed Limit: {speed_limit}")
-                cv2.imshow("Line Following", viz_img)
 
+                if saw_red_light:
+                    speed = 0
+                elif speed_limit:
+                    speed = min(speed, speed_limit)
+
+                await self.can_controller.send_movement(speed, KartGearBox.forward, steering_angle)
+
+                cv2.imshow("Line Following", viz_img)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
         finally:
@@ -47,5 +54,5 @@ class AutonomousMode(IControlMode):
         await self.can_controller.send_control(0 if self.car_type == CarType.hunter else 100, True, HunterControlMode.idle_mode)
         if self.car_type != CarType.hunter:
             await self.can_controller.send_movement(0, KartGearBox.neutral, 0)
-        self.can_bus.shutown()
+        self.can_bus.shutdown()
         print("Stopping autonomous mode.")
