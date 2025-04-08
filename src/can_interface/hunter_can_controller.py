@@ -29,14 +29,16 @@ class HunterCanController(ICanController):
         self.__listeners[message_id].append(listener)
 
     async def set_steering(self, steering_angle: float) -> None:
-        steering_angle_bytes = struct.pack('>h', int(steering_angle))
-        self.__movement_control_message.data = [0, 0, 0, 0, 0, 0] + list(bytearray(steering_angle_bytes))
-        self.__movement_control_task.modify_data(self.__movement_control_message)
+        pass
 
     async def set_throttle(self, throttle_value: float) -> None:
+        pass
+
+    async def set_steering_and_throttle(self, steering_angle: float, throttle_value: float) -> None:
+        steering_angle_bytes = struct.pack('>h', int(steering_angle))
         speed_bytes = struct.pack('>h', int(throttle_value))
-        self.__movement_control_message.data = list(bytearray(speed_bytes)) + [0, 0, 0, 0, 0, 0]
-        self.__movement_control_task.modify_data(self.__movement_control_message)\
+        self.__movement_control_message.data = list(bytearray(speed_bytes)) + [0, 0, 0, 0] + list(bytearray(steering_angle_bytes))
+        self.__movement_control_task.modify_data(self.__movement_control_message)
 
     async def set_control_mode(self, control_mode: HunterControlMode) -> None:
         self.__control_mode_message.data = list(bytearray(struct.pack('?', control_mode.value)))
