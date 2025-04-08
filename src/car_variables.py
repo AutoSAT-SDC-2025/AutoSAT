@@ -1,5 +1,4 @@
 from enum import IntEnum
-from abc import ABC, abstractmethod
 
 CAN_MESSAGE_SENDING_SPEED = 0.04
 
