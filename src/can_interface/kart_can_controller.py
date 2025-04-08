@@ -1,4 +1,7 @@
+import logging
 import struct
+import threading
+
 import can
 from src.can_interface.can_controller_interface import ICanController, init_can_message
 from src.car_variables import KartControlCanIDs, CAN_MESSAGE_SENDING_SPEED, KartGearBox
@@ -7,10 +10,13 @@ class KartCANController(ICanController):
 
     can_bus: can.Bus
     __listeners: dict[int, list[callable]]
+    __thread: threading.Thread
 
     def __init__(self, bus: can.Bus) -> None:
         self.can_bus = bus
         self.__listeners = {}
+
+        self.__thread = threading.Thread(target=self.__listen, daemon=True)
 
         self.__kart_gearbox = KartGearBox.neutral
 
@@ -28,21 +34,25 @@ class KartCANController(ICanController):
             self.__listeners[message_id] = []
         self.__listeners[message_id].append(listener)
 
-    async def set_steering(self, steering_angle: float) -> None:
+    def set_steering(self, steering_angle: float) -> None:
         little_endian_bytes = struct.pack('f', steering_angle)
         self.__steering_message.data = list(bytearray(little_endian_bytes)) + [0, 0, 195, 0]
         self.__steering_task.modify_data(self.__steering_message)
 
-    async def set_kart_gearbox(self, kart_gearbox: KartGearBox) -> None:
+    def set_kart_gearbox(self, kart_gearbox: KartGearBox) -> None:
         self.__kart_gearbox = kart_gearbox
 
-    async def set_throttle(self, throttle_value: float) -> None:
+    def set_throttle(self, throttle_value: float) -> None:
         self.__throttle_message.data = [int(throttle_value), 0, self.__kart_gearbox.value, 0, 0, 0, 0, 0]
         self.__throttle_task.modify_data(self.__throttle_message)
 
-    async def set_break(self, break_value: int) -> None:
+    def set_break(self, break_value: int) -> None:
         self.__breaking_message.data[0] = break_value
         self.__breaking_task.modify_data(self.__breaking_message)
+
+    def start(self) -> None:
+        self.__thread.start()
+        logging.debug("created task for __listen")
 
     def __listen(self) -> None:
         while True:

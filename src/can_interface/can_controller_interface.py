@@ -11,9 +11,13 @@ class ICanController(ABC):
         pass
 
     @abstractmethod
-    async def set_throttle(self, throttle_value: float) -> None:
+    def set_throttle(self, throttle_value: float) -> None:
         pass
 
     @abstractmethod
-    async def set_steering(self, steering_angle: float) -> None:
+    def set_steering(self, steering_angle: float) -> None:
+        pass
+
+    @abstractmethod
+    def start(self) -> None:
         pass
