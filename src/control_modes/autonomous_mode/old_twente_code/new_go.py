@@ -1,4 +1,4 @@
-import asyncio
+import logging
 import sys
 import cv2
 import os
@@ -12,6 +12,8 @@ from typing import Dict
 import platform
 from pathlib import Path
 import threading
+
+from src.misc import print_can_messages, setup_listeners
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
@@ -31,10 +33,10 @@ from object_detection import initialize, traffic_object_detection, adjust_thrott
 
 from src.can_interface.can_factory import select_can_controller_creator, create_can_controller
 from src.can_interface.bus_connection import connect_to_can_interface, disconnect_from_can_interface
-from src.car_variables import CarType, KartGearBox, HunterControlMode
+from src.car_variables import CarType, KartGearBox, HunterControlMode, HunterFeedbackCanIDs, KartFeedbackCanIDs
 
 
-async def main():
+def main():
     """
     Main loop of the self-driving car, populates the frame queue and writes to the self-driving car its steering and
     throttle, it also initializes everything that is needed.
@@ -45,6 +47,8 @@ async def main():
     car_type = CarType.hunter
     can_creator = select_can_controller_creator(car_type)
     can_controller = create_can_controller(can_creator, bus)
+    can_controller.start()
+    setup_listeners(can_controller, car_type)
 
     # Initialize cameras
     cameras = initialize_cameras()
@@ -132,8 +136,10 @@ async def main():
         frame = cv2.resize(frame, (int(width * scale), int(height * scale)))
         hx, hy = getHorizon(frame)
         print("Horizon found at", hy)
+        countL = 0
+        countR = 0
+        countMax = 3
 
-        # Overtaking initialization (moved outside the loop)
         car_passed = False
         t0 = 0
         tprev = 0
@@ -158,11 +164,6 @@ async def main():
             # Resize the frame
             frame = cv2.resize(frame, (int(width * scale), int(height * scale)))
 
-            # Rest of the processing logic...
-            countL = 0
-            countR = 0
-            countMax = 3
-
             # Recording part
             ok_count = 0
             values = can_listener.get_new_values()
@@ -178,6 +179,8 @@ async def main():
                 camera.grab()
 
             # Get camera data
+            _, frame = front_camera.read()
+            # add frame to frame queue (in cv2 format)
             frame_queue.append(frame)
 
             if len(throttle_queue) != 0:
@@ -186,15 +189,16 @@ async def main():
                 car_spotted = throttle_state['car in range']
                 kill_object_detection = throttle_state['kill object detection']
 
+            throttle_msg_data=[throttle_index, 0, 1, 0, 0, 0, 0, 0]
+
             if car_type is CarType.hunter:
                 # await can_controller.set_throttle(throttle_index)
-                await can_controller.set_control_mode(HunterControlMode.command_mode)
-                await can_controller.set_parking_mode(False)
-                await can_controller.set_steering_and_throttle(0.0,throttle_index)
+                can_controller.set_control_mode(HunterControlMode.command_mode)
+                can_controller.set_parking_mode(False)
+                can_controller.set_steering_and_throttle(0.0,throttle_index*10)
             elif car_type is CarType.kart:
-                await can_controller.set_kart_gearbox(KartGearBox.forward)
-                await can_controller.set_throttle(throttle_index)
-            throttle_msg_data=[throttle_index, 0, 1, 0, 0, 0, 0, 0]
+                can_controller.set_kart_gearbox(KartGearBox.forward)
+                can_controller.set_throttle(throttle_index)
             # throttle_msg.data = [throttle_index, 0, 1, 0, 0, 0, 0, 0]
 
             # Steering part
@@ -207,6 +211,7 @@ async def main():
                 wr = 1
 
                 if car_spotted and not car_passed:
+                    print(".")
                     if t0 == 0:
                         t0 = timestamp
                         tprev = timestamp
@@ -239,7 +244,10 @@ async def main():
                     steer_angle = 0
                 else:
                     Error = target - width / 2
-                    steer_angle = min(Error / (width / 2), 1.05) if Error > 0 else max(Error / (width / 2), -1.05)
+                    if Error > 0:
+                        steer_angle = min(Error / (width / 2), 1.05)
+                    else:
+                        steer_angle = max(Error / (width / 2), -1.05)
             else:
                 print("ERROR, NO LINES FOUND")
                 throttle_msg_data = [1, 0, 1, 0, 0, 0, 0, 0]
@@ -251,12 +259,13 @@ async def main():
             if car_type is CarType.hunter:
                 # await can_controller.set_throttle(throttle_msg_data[0])
                 # await can_controller.set_steering(steer_angle)
-                await can_controller.set_steering_and_throttle(steer_angle, throttle_msg_data[0])
+                can_controller.set_steering_and_throttle(steer_angle*5760, throttle_msg_data[0]*20)
+                # logging.debug(f"Sent Hunter CAN message: Steering={steer_angle * 5760}, Throttle={throttle_msg_data[0] * 20}")
             elif car_type is CarType.kart:
-                await can_controller.set_kart_gearbox(KartGearBox.forward)
-                await can_controller.set_throttle(throttle_msg_data[0])
-                await can_controller.set_steering(steer_angle)
-
+                can_controller.set_kart_gearbox(KartGearBox.forward)
+                can_controller.set_throttle(throttle_msg_data[0])
+                can_controller.set_steering(steer_angle)
+                # logging.debug(f"Sent Kart CAN message: Steering={steer_angle}, Throttle={throttle_msg_data[0]}")
 
             # if throttle_msg.data[0] == 0:
             #     brake_msg.data = [50, 0, 1, 0, 0, 0, 0, 0]
@@ -272,10 +281,9 @@ async def main():
 
             if car_type is CarType.hunter:
                 # await can_controller.set_throttle(-0.5*throttle_msg_data[0])
-                await can_controller.set_steering_and_throttle(0.0, -0.5*throttle_msg_data[0])
-                await can_controller.set_parking_mode(True)
+                can_controller.set_parking_mode(False)
             elif car_type is CarType.kart:
-                await can_controller.set_break(brake_msg_data[0])
+                can_controller.set_break(brake_msg_data[0])
 
 
             frame_count += 1
@@ -284,7 +292,7 @@ async def main():
         pass
 
     finally:
-        await can_controller.set_control_mode(HunterControlMode.idle_mode)
+        can_controller.set_control_mode(HunterControlMode.idle_mode)
         end_time = time.time()
         time_diff = end_time - start_time
         print(f'Time elapsed: {time_diff:.2f}s')
@@ -311,4 +319,4 @@ async def main():
 
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()
