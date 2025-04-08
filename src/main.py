@@ -1,11 +1,11 @@
-import asyncio
-
+import logging
 from src.car_variables import CarType
 from src.control_modes.autonomous_mode.old_twente_code import go, new_go
 from src.control_modes.manual_mode.manual_mode import ManualMode
 
 
-async def main():
+def main():
+    logging.basicConfig(level=logging.DEBUG)
     mode = input("Which mode do you want to launch. 1 for manual, 2 for autonomous: ")
     try:
         car = int(input("Which car are we using: 0 for kart, 1 for hunter: "))
@@ -15,13 +15,12 @@ async def main():
         print(e)
         return
 
-    manual = ManualMode(CarType(car))
-
     if mode == "1":
-        await manual.start()
+        manual = ManualMode(CarType(car))
+        manual.start()
     elif mode == "2":
-        await new_go.main()
+        new_go.main()
     # go.main()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
