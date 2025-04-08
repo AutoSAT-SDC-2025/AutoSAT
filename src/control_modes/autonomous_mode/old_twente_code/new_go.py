@@ -31,7 +31,7 @@ from object_detection import initialize, traffic_object_detection, adjust_thrott
 
 from src.can_interface.can_factory import select_can_controller_creator, create_can_controller
 from src.can_interface.bus_connection import connect_to_can_interface, disconnect_from_can_interface
-from src.car_variables import CarType, KartGearBox
+from src.car_variables import CarType, KartGearBox, HunterControlMode
 
 
 async def main():
@@ -188,6 +188,8 @@ async def main():
 
             if car_type is CarType.hunter:
                 # await can_controller.set_throttle(throttle_index)
+                await can_controller.set_control_mode(HunterControlMode.command_mode)
+                await can_controller.set_parking_mode(False)
                 await can_controller.set_steering_and_throttle(0.0,throttle_index)
             elif car_type is CarType.kart:
                 await can_controller.set_kart_gearbox(KartGearBox.forward)
@@ -271,6 +273,7 @@ async def main():
             if car_type is CarType.hunter:
                 # await can_controller.set_throttle(-0.5*throttle_msg_data[0])
                 await can_controller.set_steering_and_throttle(0.0, -0.5*throttle_msg_data[0])
+                await can_controller.set_parking_mode(True)
             elif car_type is CarType.kart:
                 await can_controller.set_break(brake_msg_data[0])
 
@@ -281,6 +284,7 @@ async def main():
         pass
 
     finally:
+        await can_controller.set_control_mode(HunterControlMode.idle_mode)
         end_time = time.time()
         time_diff = end_time - start_time
         print(f'Time elapsed: {time_diff:.2f}s')
