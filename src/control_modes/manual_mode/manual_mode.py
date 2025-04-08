@@ -53,8 +53,7 @@ class ManualMode(IControlMode):
                 if self.car_type == CarType.hunter:
                     self.can_controller.add_listener(HunterFeedbackCanIDs.movement_feedback, print_can_messages)
                     self.can_controller.add_listener(HunterFeedbackCanIDs.status_feedback, print_can_messages)
-                    await self.can_controller.set_throttle(throttle)
-                    await self.can_controller.set_steering(steering)
+                    await self.can_controller.set_steering_and_throttle(steering, throttle)
                     await self.can_controller.set_parking_mode(park)
                 elif self.car_type == CarType.kart:
                     self.can_controller.add_listener(KartFeedbackCanIDs.steering_ecu, print_can_messages)
