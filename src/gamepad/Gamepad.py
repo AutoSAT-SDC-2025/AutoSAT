@@ -18,6 +18,7 @@ import struct
 import time
 import threading
 import inspect
+from evdev import InputDevice, ecodes, ff, list_devices
 # from _pyrepl.readline import raw_input
 
 
@@ -66,6 +67,10 @@ class Gamepad:
         while True:
             try:
                 self.joystickFile = open(self.joystickPath, 'rb')
+                for name in list_devices():
+                    self.evdevDevice = InputDevice(name)  # Add evdev device
+                    if ecodes.EV_FF in self.evdevDevice.capabilities():
+                        break
                 break
             except IOError as e:
                 retryCount -= 1
@@ -95,6 +100,33 @@ class Gamepad:
             self.joystickFile.close()
         except AttributeError:
             pass
+
+    def rumble(self, strong_magnitude: int, weak_magnitude: int, duration_ms: int):
+        """Send a rumble (vibration) command to the gamepad.
+
+        Args:
+            strong_magnitude (int): Intensity of the strong rumble motor (0-65535).
+            weak_magnitude (int): Intensity of the weak rumble motor (0-65535).
+            duration_ms (int): Duration of the rumble in milliseconds.
+        """
+        if not hasattr(self, 'evdevDevice'):
+            raise RuntimeError("Rumble is not supported on this gamepad.")
+
+        effect = ff.Effect(
+            ecodes.FF_RUMBLE, -1, 0,
+            ff.Trigger(0, 0),
+            ff.Replay(duration_ms, 0),
+            ff.EffectType(ff_rumble_effect=ff.Rumble(strong_magnitude, weak_magnitude))
+        )
+        try:
+            effect_id = self.evdevDevice.upload_effect(effect)
+
+            self.evdevDevice.write(ecodes.EV_FF, effect_id, 1)
+
+            time.sleep(duration_ms / 1000.0)
+            self.evdevDevice.erase_effect(effect_id)
+        except Exception as e:
+            raise RuntimeError(f"Could not send rumble command to gamepad: %s: {e}")
 
     def _setupReverseMaps(self):
         for index in self.buttonNames:
@@ -542,7 +574,9 @@ class Gamepad:
         self.connected = False
         self.removeAllEventHandlers()
         self.stopBackgroundUpdates()
-        del self.joystickFile
+        if hasattr(self, 'joystickFile'):
+            self.joystickFile.close()
+            del self.joystickFile
 
 ###########################
 # Import gamepad mappings #
