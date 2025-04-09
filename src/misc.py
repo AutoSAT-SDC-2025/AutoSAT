@@ -30,7 +30,7 @@ def controller_break_value(gamepad: Gamepad) -> int:
     return max(0,-round((gamepad.axis(ControllerMapping.park)**3)*100))
 
 def print_can_messages(message) -> None:
-    print(f"Can Message: {message}\t")
+    print(f"Can Message: {message}\t", flush=True)
 
 def setup_listeners(can_controller, car_type):
     """Register CAN message listeners."""
