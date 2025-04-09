@@ -51,7 +51,8 @@ class ManualMode(IControlMode):
 
     def handle_park(self, value):
         """Callback for parking trigger"""
-        self.park = True if value == 1 else False
+        trigger_threshold = 0.8
+        self.park = True if value < trigger_threshold else False
 
     def start(self) -> None:
         """Start manual mode."""
