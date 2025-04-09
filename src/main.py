@@ -5,7 +5,7 @@ from src.control_modes.manual_mode.manual_mode import ManualMode
 
 
 def main():
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     mode = input("Which mode do you want to launch. 1 for manual, 2 for autonomous: ")
     try:
         car = int(input("Which car are we using: 0 for kart, 1 for hunter: "))
