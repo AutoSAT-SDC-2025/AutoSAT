@@ -8,6 +8,7 @@ from ...control_modes.autonomous_mode.object_detection.TrafficDetection import T
 from ...can_interface.bus_connection import connect_to_can_interface
 from ...can_interface.can_controller import CarCanController
 
+
 class AutonomousMode(IControlMode):
     def __init__(self, car_type: CarType):
         self.car_type = car_type
@@ -51,7 +52,8 @@ class AutonomousMode(IControlMode):
             cv2.destroyAllWindows()
 
     async def stop(self) -> None:
-        await self.can_controller.send_control(0 if self.car_type == CarType.hunter else 100, True, HunterControlMode.idle_mode)
+        await self.can_controller.send_control(0 if self.car_type == CarType.hunter else 100, True,
+                                               HunterControlMode.idle_mode)
         if self.car_type != CarType.hunter:
             await self.can_controller.send_movement(0, KartGearBox.neutral, 0)
         self.can_bus.shutdown()

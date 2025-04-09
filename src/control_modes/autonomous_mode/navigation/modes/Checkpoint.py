@@ -1,7 +1,6 @@
 # src/control_modes/autonomous_mode/navigation/modes/Checkpoint.py
-import asyncio
 
-from src.control_modes.autonomous_mode.navigation.modes.INavigator import INavigator
+from src.control_modes.autonomous_mode.navigation.INavigator import INavigator
 
 
 class Checkpoint(INavigator):
