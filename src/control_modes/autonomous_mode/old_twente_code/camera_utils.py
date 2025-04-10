@@ -2,7 +2,7 @@ import sys
 from typing import Dict
 import cv2
 import os
-from constants import height, width, FALLBACK_VIDEO_PATH
+from constants import height, width, FALLBACK_VIDEO_PATH, camera_buffer_size
 from line_detection import getLines, newLines, splitLines, longestLine
 import numpy as np
 from src.control_modes.autonomous_mode.old_twente_code import video
@@ -39,11 +39,13 @@ def initialize_cameras() -> Dict[str, cv2.VideoCapture]:
             continue
         capture.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         capture.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        capture.set(cv2.CAP_PROP_BUFFERSIZE,camera_buffer_size)
         capture.set(cv2.CAP_PROP_AUTOFOCUS, 0)
         capture.set(cv2.CAP_PROP_FOCUS, 0)
         capture.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
         capture.set(cv2.CAP_PROP_FPS, 30)
         capture.set(cv2.CAP_PROP_AUTO_EXPOSURE, 1)
+        capture.set(cv2.CAP_PROP_EXPOSURE, 100)
         cameras[camera_type] = capture
 
     if not cameras:
