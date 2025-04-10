@@ -12,6 +12,20 @@ class Checkpoint(INavigator):
         self.reached_radius = 1.5
         self.running = True
 
+    def compute_steering(self, current_pos, destination, current_heading_degrees):
+        dx = destination[0] - current_pos[0]
+        dy = destination[1] - current_pos[1]
+
+        desired_angle_rad = math.atan2(dy, dx)
+        desired_angle_deg = math.degrees(desired_angle_rad)
+        angle_error = desired_angle_deg - current_heading_degrees
+        angle_error = (angle_error + 180) % 360 - 180
+
+        max_steering_angle = 30 # todo: change this to hunter or cart's actual radius.
+        steering = max(-max_steering_angle, min(max_steering_angle, angle_error))
+
+        return steering
+
     def inRadius(self, posA, posB):
         return math.dist(posA, posB) <= self.reached_radius
 
@@ -20,17 +34,12 @@ class Checkpoint(INavigator):
         return 0, 0
 
     def navigateTo(self, current_pos, destination):
-        """
-        Basic navigation placeholder: drives forward, turns based on bearing.
-        """
-        dx = destination[0] - current_pos[0]
-        dy = destination[1] - current_pos[1]
+        current_heading = 0 # adjust based on gps/localization system
 
-        angle = math.atan2(dy, dx)
-        steering = max(-1.0, min(1.0, angle))  # Normalized steering range [-1, 1]
-        throttle = 0.3  # Constant speed for now
+        steering = self.compute_steering(current_pos, destination, current_heading)
+        throttle = 0.3  # Constant forward speed for now - ignore obstacles/traffic signs
 
-        print(f"[NAV] Steering: {steering:.2f}, Throttle: {throttle:.2f} → to {destination}")
+        print(f"[NAV] Steering: {steering:.2f}°, Throttle: {throttle:.2f} → to {destination}")
         self.can_controller.set_steering(steering)
         self.can_controller.set_throttle(throttle)
         self.can_controller.set_break(0)
@@ -58,7 +67,7 @@ class Checkpoint(INavigator):
                     self.can_controller.set_throttle(0)
                     self.can_controller.set_break(100)
 
-            await asyncio.sleep(1) # This doesn't need to be ran every 'frame'
+            await asyncio.sleep(0.1)
 
     async def stop(self) -> None:
         print("Stopping navigation.")
