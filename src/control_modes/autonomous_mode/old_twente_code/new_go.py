@@ -13,6 +13,8 @@ import platform
 from pathlib import Path
 import threading
 
+import numpy as np
+
 from src.misc import print_can_messages, setup_listeners
 
 FILE = Path(__file__).resolve()
@@ -48,7 +50,7 @@ def main():
     can_creator = select_can_controller_creator(car_type)
     can_controller = create_can_controller(can_creator, bus)
     can_controller.start()
-    setup_listeners(can_controller, car_type)
+    # setup_listeners(can_controller, car_type)
 
     # Initialize cameras
     cameras = initialize_cameras()
@@ -125,21 +127,20 @@ def main():
         start_time = time.time()
         frame_count = 0
 
-        camera_feed_lost_count = 0
-        max_retries = 10  # Number of retries before exiting
-
-        # Horizon detection (moved outside the loop)
+        # Horizon detection
         ret, frame = front_camera.read()
         if not ret or frame is None:
-            print("[ERROR] Unable to read initial frame. Exiting...")
-            return
-        frame = cv2.resize(frame, (int(width * scale), int(height * scale)))
+            print("[ERROR] Failed to read frame! Substituting black frame...")
+            frame = np.zeros((height, width, 3), dtype=np.uint8)
+        else:
+            frame = cv2.resize(frame, (int(width * scale), int(height * scale)))
         hx, hy = getHorizon(frame)
         print("Horizon found at", hy)
         countL = 0
         countR = 0
         countMax = 3
 
+        #overtaking initialization
         car_passed = False
         t0 = 0
         tprev = 0
@@ -147,149 +148,138 @@ def main():
         turnsens = 0.2
         throttle_index = 0
         car_spotted = False
+        try:
+            while True:
+                # Recording part
+                ok_count = 0
+                values = can_listener.get_new_values()
+                timestamp = time.time()
 
-        while True:
-            ret, frame = front_camera.read()
-            if not ret or frame is None:
-                camera_feed_lost_count += 1
-                print(f"[WARNING] Camera feed lost. Retry {camera_feed_lost_count}/{max_retries}...")
-                if camera_feed_lost_count >= max_retries:
-                    print("[ERROR] Camera feed permanently lost. Exiting...")
-                    break
-                time.sleep(0.5)  # Wait before retrying
-                continue
-            else:
-                camera_feed_lost_count = 0  # Reset the counter if the feed is restored
+                # First grab all camera frames
+                for camera in cameras.values():
+                    camera.grab()
 
-            # Resize the frame
-            frame = cv2.resize(frame, (int(width * scale), int(height * scale)))
+                # Then retrieve them
+                for side, camera in cameras.items():
+                    ok, frames[side] = camera.retrieve()
+                    ok_count += ok
 
-            # Recording part
-            ok_count = 0
-            values = can_listener.get_new_values()
-            timestamp = time.time()
-            for side, camera in cameras.items():
-                ok, frames[side] = camera.retrieve()
-                ok_count += ok
-            if ok_count == len(cameras):
-                for side, frame in frames.items():
-                    image_worker.put((timestamp, side, frame))
-                can_worker.put((timestamp, values))
-            for camera in cameras.values():
-                camera.grab()
+                if ok_count == len(cameras):
+                    for side, frame in frames.items():
+                        image_worker.put((timestamp, side, frame))
+                    can_worker.put((timestamp, values))
 
-            # Get camera data
-            _, frame = front_camera.read()
-            # add frame to frame queue (in cv2 format)
-            frame_queue.append(frame)
+                # Get camera data
+                _, frame = front_camera.read()
+                # add frame to frame queue (in cv2 format)
+                frame_queue.append(frame)
 
-            if len(throttle_queue) != 0:
-                throttle_state = throttle_queue.pop()
-                throttle_index = throttle_state['throttle']
-                car_spotted = throttle_state['car in range']
-                kill_object_detection = throttle_state['kill object detection']
+                if len(throttle_queue) != 0:
+                    throttle_state = throttle_queue.pop()
+                    throttle_index = throttle_state['throttle']
+                    car_spotted = throttle_state['car in range']
+                    kill_object_detection = throttle_state['kill object detection']
 
-            throttle_msg_data=[throttle_index, 0, 1, 0, 0, 0, 0, 0]
+                throttle_msg_data=[throttle_index, 0, 1, 0, 0, 0, 0, 0]
 
-            if car_type is CarType.hunter:
-                # await can_controller.set_throttle(throttle_index)
-                can_controller.set_control_mode(HunterControlMode.command_mode)
-                can_controller.set_parking_mode(False)
-                can_controller.set_steering_and_throttle(0.0,throttle_index*10)
-            elif car_type is CarType.kart:
-                can_controller.set_kart_gearbox(KartGearBox.forward)
-                can_controller.set_throttle(throttle_index)
-            # throttle_msg.data = [throttle_index, 0, 1, 0, 0, 0, 0, 0]
+                if car_type is CarType.hunter:
+                    # await can_controller.set_throttle(throttle_index)
+                    can_controller.set_control_mode(HunterControlMode.command_mode)
+                    can_controller.set_parking_mode(False)
+                    can_controller.set_steering_and_throttle(0.0,throttle_index*10)
+                elif car_type is CarType.kart:
+                    can_controller.set_kart_gearbox(KartGearBox.forward)
+                    can_controller.set_throttle(throttle_index)
+                # throttle_msg.data = [throttle_index, 0, 1, 0, 0, 0, 0, 0]
 
-            # Steering part
-            lines = getLines(frame)
-            if lines is not None:
-                lines = newLines(lines)
-                llines, rlines = splitLines(lines)
+                # Steering part
+                lines = getLines(frame)
+                if lines is not None:
+                    lines = newLines(lines)
+                    llines, rlines = splitLines(lines)
 
-                wl = 1
-                wr = 1
+                    wl = 1
+                    wr = 1
 
-                if car_spotted and not car_passed:
-                    print(".")
-                    if t0 == 0:
-                        t0 = timestamp
-                        tprev = timestamp
-                        print("CAR SPOTTED")
-                    tnow = timestamp - t0
-                    speed = int(struct.unpack(">H", bytearray(values["speed_sensor"][:2]))[0]) if values["speed_sensor"] else 0
-                    speed = int(speed / 36)
-                    distance_change = speed * (tnow - tprev)
-                    distance_driven += distance_change
-                    tprev = tnow
+                    if car_spotted and not car_passed:
+                        print(".")
+                        if t0 == 0:
+                            t0 = timestamp
+                            tprev = timestamp
+                            print("CAR SPOTTED")
+                        tnow = timestamp - t0
+                        speed = int(struct.unpack(">H", bytearray(values["speed_sensor"][:2]))[0]) if values["speed_sensor"] else 0
+                        speed = int(speed / 36)
+                        distance_change = speed * (tnow - tprev)
+                        distance_driven += distance_change
+                        tprev = tnow
 
-                    if distance_driven < 5:
-                        target = findTarget(llines, rlines, hy, frame, wl, wr, weight=0, bias=-400, draw=0)
-                        print("Going Left")
-                    elif distance_driven < 12:
-                        target = findTarget(llines, rlines, hy, frame, wl, wr, weight=1, bias=0, draw=0)
-                        print("Going Straight")
-                    elif distance_driven < 17:
-                        target = findTarget(llines, rlines, hy, frame, wl, wr, weight=0, bias=400, draw=0)
-                        print("Going Right")
+                        if distance_driven < 5:
+                            target = findTarget(llines, rlines, hy, frame, wl, wr, weight=0, bias=-400, draw=0)
+                            print("Going Left")
+                        elif distance_driven < 12:
+                            target = findTarget(llines, rlines, hy, frame, wl, wr, weight=1, bias=0, draw=0)
+                            print("Going Straight")
+                        elif distance_driven < 17:
+                            target = findTarget(llines, rlines, hy, frame, wl, wr, weight=0, bias=400, draw=0)
+                            print("Going Right")
+                        else:
+                            print("Overtaking Completed")
+                            car_passed = True
                     else:
-                        print("Overtaking Completed")
-                        car_passed = True
-                else:
-                    target = findTarget(llines, rlines, hy, frame, wl, wr, weight=1, bias=0, draw=0)
+                        target = findTarget(llines, rlines, hy, frame, wl, wr, weight=1, bias=0, draw=0)
 
-                if target is False:
+                    if target is False:
+                        print("ERROR, NO LINES FOUND")
+                        throttle_msg_data = [1, 0, 1, 0, 0, 0, 0, 0]
+                        steer_angle = 0
+                    else:
+                        Error = target - width / 2
+                        if Error > 0:
+                            steer_angle = min(Error / (width / 2), 1.05)
+                        else:
+                            steer_angle = max(Error / (width / 2), -1.05)
+                else:
                     print("ERROR, NO LINES FOUND")
                     throttle_msg_data = [1, 0, 1, 0, 0, 0, 0, 0]
                     steer_angle = 0
+
+                # steering_msg.data = list(bytearray(struct.pack("f", float(steer_angle)))) + [0] * 4
+                # steering_task.modify_data(steering_msg)
+                # throttle_task.modify_data(throttle_msg)
+                if car_type is CarType.hunter:
+                    # await can_controller.set_throttle(throttle_msg_data[0])
+                    # await can_controller.set_steering(steer_angle)
+                    can_controller.set_steering_and_throttle(steer_angle*5760, throttle_msg_data[0]*20)
+                    # logging.debug(f"Sent Hunter CAN message: Steering={steer_angle * 5760}, Throttle={throttle_msg_data[0] * 20}")
+                elif car_type is CarType.kart:
+                    can_controller.set_kart_gearbox(KartGearBox.forward)
+                    can_controller.set_throttle(throttle_msg_data[0])
+                    can_controller.set_steering(steer_angle)
+                    # logging.debug(f"Sent Kart CAN message: Steering={steer_angle}, Throttle={throttle_msg_data[0]}")
+
+                # if throttle_msg.data[0] == 0:
+                #     brake_msg.data = [50, 0, 1, 0, 0, 0, 0, 0]
+                #     brake_task.modify_data(brake_msg)
+                # else:
+                #     brake_msg.data = [0, 0, 1, 0, 0, 0, 0, 0]
+                #     brake_task.modify_data(brake_msg)
+
+                if throttle_msg_data[0] == 0:
+                    brake_msg_data = [50, 0, 1, 0, 0, 0, 0, 0]
                 else:
-                    Error = target - width / 2
-                    if Error > 0:
-                        steer_angle = min(Error / (width / 2), 1.05)
-                    else:
-                        steer_angle = max(Error / (width / 2), -1.05)
-            else:
-                print("ERROR, NO LINES FOUND")
-                throttle_msg_data = [1, 0, 1, 0, 0, 0, 0, 0]
-                steer_angle = 0
+                    brake_msg_data = [0, 0, 1, 0, 0, 0, 0, 0]
 
-            # steering_msg.data = list(bytearray(struct.pack("f", float(steer_angle)))) + [0] * 4
-            # steering_task.modify_data(steering_msg)
-            # throttle_task.modify_data(throttle_msg)
-            if car_type is CarType.hunter:
-                # await can_controller.set_throttle(throttle_msg_data[0])
-                # await can_controller.set_steering(steer_angle)
-                can_controller.set_steering_and_throttle(steer_angle*5760, throttle_msg_data[0]*20)
-                # logging.debug(f"Sent Hunter CAN message: Steering={steer_angle * 5760}, Throttle={throttle_msg_data[0] * 20}")
-            elif car_type is CarType.kart:
-                can_controller.set_kart_gearbox(KartGearBox.forward)
-                can_controller.set_throttle(throttle_msg_data[0])
-                can_controller.set_steering(steer_angle)
-                # logging.debug(f"Sent Kart CAN message: Steering={steer_angle}, Throttle={throttle_msg_data[0]}")
-
-            # if throttle_msg.data[0] == 0:
-            #     brake_msg.data = [50, 0, 1, 0, 0, 0, 0, 0]
-            #     brake_task.modify_data(brake_msg)
-            # else:
-            #     brake_msg.data = [0, 0, 1, 0, 0, 0, 0, 0]
-            #     brake_task.modify_data(brake_msg)
-
-            if throttle_msg_data[0] == 0:
-                brake_msg_data = [50, 0, 1, 0, 0, 0, 0, 0]
-            else:
-                brake_msg_data = [0, 0, 1, 0, 0, 0, 0, 0]
-
-            if car_type is CarType.hunter:
-                # await can_controller.set_throttle(-0.5*throttle_msg_data[0])
-                can_controller.set_parking_mode(False)
-            elif car_type is CarType.kart:
-                can_controller.set_break(brake_msg_data[0])
+                if car_type is CarType.hunter:
+                    # await can_controller.set_throttle(-0.5*throttle_msg_data[0])
+                    can_controller.set_parking_mode(False)
+                elif car_type is CarType.kart:
+                    can_controller.set_break(brake_msg_data[0])
 
 
-            frame_count += 1
-
-    except KeyboardInterrupt:
-        pass
+                frame_count += 1
+        except KeyboardInterrupt:
+            pass
 
     finally:
         can_controller.set_control_mode(HunterControlMode.idle_mode)
