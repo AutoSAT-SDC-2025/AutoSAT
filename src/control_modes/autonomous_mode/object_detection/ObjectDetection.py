@@ -1,3 +1,5 @@
+import os
+
 import cv2
 from Detection import ObjectDetection
 from TrafficDetection import TrafficManager
@@ -34,5 +36,7 @@ def main(weights_path: str, input_source: str, video_path: str = None):
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
+    print("Current working dir:", os.getcwd())
+
     # Use v5_model.pt (model from last year) on the video (default.mp4)
-    main('v5_model.pt', 'video', 'default.mp4')
+    main('assets/v5_model.pt', 'video', 'assets/default.mp4')

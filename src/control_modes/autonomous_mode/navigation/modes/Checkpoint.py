@@ -7,7 +7,7 @@ import asyncio
 class Checkpoint(INavigator):
     def __init__(self, can_controller):
         self.can_controller = can_controller
-        self.checkpoints = [(10, 10), (20, 20), (30, 30)]
+        self.checkpoints = [(10, 10), (20, 20), (30, 30)] # placeholders; need actual track coords.
         self.current_checkpoint = None
         self.reached_radius = 1.5
         self.running = True

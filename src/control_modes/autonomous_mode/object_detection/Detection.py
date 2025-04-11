@@ -47,8 +47,9 @@ class ObjectDetection:
 
     def detect_objects(self, frame):
         img_size = check_img_size(frame.shape[:2], s=32)
-        img = cv2.resize(frame, (img_size[1], img_size[0]))
-        img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame_resized = cv2.resize(frame, (img_size[1], img_size[0]))
+        img = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
+
         img = img.transpose((2, 0, 1))
         img = torch.from_numpy(np.expand_dims(img, axis=0)).float() / 255.0
         img = img.to(self.device)

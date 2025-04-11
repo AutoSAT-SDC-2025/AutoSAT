@@ -41,7 +41,7 @@ class AutonomousMode(IControlMode, ABC):
         self.can_controller = create_can_controller(can_creator, self.can_bus)
 
         self.nav = LineFollowingNavigation(width=848, height=480)
-        self.object_detector = ObjectDetection(weights_path='../../../assets/v5_model.pt', input_source='video')
+        self.object_detector = ObjectDetection(weights_path='assets/v5_model.pt', input_source='video')
         self.traffic_manager = TrafficManager()
 
 
