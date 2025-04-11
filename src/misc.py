@@ -1,9 +1,8 @@
 import logging
-
 from src.car_variables import CarType, HunterFeedbackCanIDs, KartFeedbackCanIDs
 from src.gamepad import Gamepad
 from src.gamepad.controller_mapping import ControllerMapping
-
+from src.can_interface.can_decoder import print_can_messages
 
 def calculate_throttle(controller_axis_value: float, car_type: CarType) -> float | None:
     if car_type == CarType.kart:
@@ -28,9 +27,6 @@ def dead_man_switch(gamepad: Gamepad) -> bool:
 
 def controller_break_value(gamepad: Gamepad) -> int:
     return max(0,-round((gamepad.axis(ControllerMapping.park)**3)*100))
-
-def print_can_messages(message) -> None:
-    print(f"Can Message: {message}\t")
 
 def setup_listeners(can_controller, car_type):
     """Register CAN message listeners."""

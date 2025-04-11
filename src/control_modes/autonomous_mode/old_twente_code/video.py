@@ -14,9 +14,11 @@ def get_camera_config(config_folder: str = "configs") -> Optional[CamConfig]:
 
     Returns None if no valid configuration could be found.
     """
-    for filename in glob.glob(os.path.join(os.path.normpath(config_folder), '*.json')):
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    abs_config_folder = os.path.join(script_dir, config_folder)
+    for filename in glob.glob(os.path.join(os.path.normpath(abs_config_folder), '*.json')):
         with open(filename, 'r') as fp:
             config: CamConfig = json.load(fp)
-            if all((os.path.exists(camera) and not os.path.isdir(camera) for camera in config.values())):
+            if any((os.path.exists(camera) and not os.path.isdir(camera) for camera in config.values())):
                 return config
     return None

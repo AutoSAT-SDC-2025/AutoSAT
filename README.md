@@ -24,3 +24,5 @@ Then to connect the controller:
 Now everything should be connected. If it doesn't work you need to remove the controller and try again.
 
 To test that everything works install the joystick package `sudo apt-get install joystick` and test the controller `jstest /dev/input/js0`.
+
+In case rumble breaks again this one file needs to modified like in [here](https://github.com/atar-axis/xpadneo/commit/4a3a623b5facca8184e9070317fea03adc3a9e8f), but keep an eye out for any issues on the main page of [xpadneo](https://github.com/atar-axis/xpadneo/).
