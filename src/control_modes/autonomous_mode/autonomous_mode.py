@@ -58,7 +58,7 @@ async def start(self):
             logging.info("Checkpoint mode active. Delegating control to Checkpoint navigator.")
             await self.checkpoint_nav.start()
             return
-        cap = cv2.VideoCapture('../../../assets/default.mp4')
+        cap = cv2.VideoCapture('assets/default.mp4')
         if not cap.isOpened():
             logging.error("Error: Could not open video file.")
             return
