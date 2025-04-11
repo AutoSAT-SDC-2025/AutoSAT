@@ -1,4 +1,4 @@
-from src.object_detection.detection import ObjectDetection
+from src.control_modes.autonomous_mode.object_detection.Detection import ObjectDetection
 class PedestrianHandler:
     def __init__(self):
         self.car_distance_threshold = 2

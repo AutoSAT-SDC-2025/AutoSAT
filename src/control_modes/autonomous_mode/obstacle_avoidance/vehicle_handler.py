@@ -1,5 +1,5 @@
-from src.object_detection.detection import ObjectDetection
-from src.obstacle_avoidance.lidar_scan import LidarScans
+from object_detection.detection import ObjectDetection
+from obstacle_avoidance.lidar_scan import LidarScans
 
 class VehicleHandler:
     def __init__(self):
