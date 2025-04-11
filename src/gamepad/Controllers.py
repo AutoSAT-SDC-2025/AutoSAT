@@ -190,6 +190,36 @@ class Xbox360(Gamepad):
         }
         self._setupReverseMaps()
 
+class XboxOne(Gamepad):
+    fullName = 'Xbox ONE controller'
+
+    def __init__(self, joystickNumber = 0):
+        Gamepad.__init__(self, joystickNumber)
+        self.axisNames = {
+            0: 'LAS -X', #Left Analog Stick Left/Right
+            1: 'LAS -Y', #Left Analog Stick Up/Down
+            2: 'LT', #Left Trigger
+            3: 'RAS -X', #Right Analog Stick Left/Right
+            4: 'RAS -Y', #Right Analog Stick Up/Down
+            5: 'RT', #Right Trigger
+            6: 'DPAD -X', #D-Pad Left/Right
+            7: 'DPAD -Y' #D-Pad Up/Down
+        }
+        self.buttonNames = {
+            0:  'A',
+            1:  'B',
+            2:  'X',
+            3:  'Y',
+            4:  'LB',
+            5:  'RB',
+            6:  'BACK',
+            7:  'START',
+            8:  'XBOX',
+            9:  'LA',
+            10: 'RA'
+        }
+        self._setupReverseMaps()
+
 class XboxONE(Gamepad):
     fullName = 'Xbox ONE controller'
 

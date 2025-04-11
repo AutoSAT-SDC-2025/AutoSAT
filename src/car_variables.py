@@ -1,5 +1,4 @@
 from enum import IntEnum
-from abc import ABC, abstractmethod
 
 CAN_MESSAGE_SENDING_SPEED = 0.04
 
@@ -14,7 +13,7 @@ class HunterControlCanIDs(IntEnum):
 
 class HunterFeedbackCanIDs(IntEnum):
     movement_feedback = 0x221
-    status_feedback = 0x441
+    status_feedback = 0x211
 
 class KartControlCanIDs(IntEnum):
     breaking = 0x110
@@ -25,7 +24,7 @@ class KartControlCanIDs(IntEnum):
 class KartFeedbackCanIDs(IntEnum):
     steering_sensor = 0x1E5
     breaking_sensor = 0x710
-    steering_ecu = 0x720
+    speed_sensor = 0x440
     internal_throttle = 0x730
 
 class KartGearBox(IntEnum):

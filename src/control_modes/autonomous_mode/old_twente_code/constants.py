@@ -1,6 +1,7 @@
 CAN_MSG_SENDING_SPEED = 0.040
-height = 480
-width = 848
+height = 480    #480
+width = 640     #848
+camera_buffer_size = 1
 scale = 1
 OBJECT_FPS_CAP = 20
 OBJECT_DOWNSAMPLE_FACTOR = 1
