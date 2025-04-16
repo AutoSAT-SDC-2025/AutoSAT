@@ -2,16 +2,20 @@ from abc import ABC
 
 from .line_detection.LineDetection import LineFollowingNavigation
 from .object_detection.ObjectDetection import ObjectDetection
+from .avoidance.Avoidance import Avoidance
 from ...car_variables import CarType, HunterControlMode, KartGearBox
 from ...control_modes.IControlMode import IControlMode
 from ...control_modes.autonomous_mode.object_detection.TrafficDetection import TrafficManager
 from ...can_interface.bus_connection import connect_to_can_interface, disconnect_from_can_interface
 from ...can_interface.can_factory import select_can_controller_creator, create_can_controller
+from ...util.Render import Renderer
 from navigation.modes.Checkpoint import Checkpoint
 from stitching import Stitcher
 
 import cv2
 import logging
+
+DO_STITCH = False
 
 
 def get_connected_cameras(max_devices=5):
@@ -25,6 +29,8 @@ def get_connected_cameras(max_devices=5):
 
 
 def stitch_frames(frames: list) -> any:
+    if not DO_STITCH:
+        return frames[0]
     stitcher = Stitcher()
     result = stitcher.stitch(frames)
     return result
@@ -37,12 +43,17 @@ class AutonomousMode(IControlMode, ABC):
         self.checkpoint_nav = Checkpoint() if self.use_checkpoint_mode else None
         self.can_bus = connect_to_can_interface(0)
 
-        can_creator = select_can_controller_creator(self.car_type)
-        self.can_controller = create_can_controller(can_creator, self.can_bus)
+        self.can_creator = select_can_controller_creator(self.car_type)
+        self.can_controller = create_can_controller(self.can_creator, self.can_bus)
 
+        self.car_seen_counter = 0
+        self.car_on_left = False
         self.nav = LineFollowingNavigation(width=848, height=480)
+        self.car_avoidance = Avoidance()
         self.object_detector = ObjectDetection(weights_path='assets/v5_model.pt', input_source='video')
         self.traffic_manager = TrafficManager()
+
+        self.renderer = Renderer()
 
 
 async def start(self):
@@ -77,24 +88,43 @@ async def start(self):
             if not frames:
                 continue
 
-            stitched_frame = len(frames) == 1 and frames[0] or stitch_frames(frames)
+            stitched_frame = frames[0] if len(frames) == 1 else stitch_frames(frames)
 
-            steering_angle, speed, viz_img, end_x = self.nav.process(stitched_frame)
-            traffic_state, detections = self.object_detector.process(stitched_frame)
+            # Clear previous drawings before new frame
+            self.renderer.clear()
+
+            steering_angle, speed, line_visuals = self.nav.process(stitched_frame)
+            self.renderer.add_drawings(line_visuals)
+            # === Object detection & traffic ===
+            traffic_state, detections, object_visuals = self.object_detector.process(stitched_frame)
+            self.renderer.add_drawings(object_visuals)
 
             saw_red_light = traffic_state['red_light']
             speed_limit = traffic_state['speed_limit']
 
+            avoidance_steering, speed_scale, avoidance_drawings = self.car_avoidance.process(stitched_frame, detections)
+            self.renderer.add_drawings(avoidance_drawings)
+
+            steering_angle += avoidance_steering
+            speed *= speed_scale
+
+
+            # Draw everything
+            self.renderer.draw(stitched_frame)
+
             if saw_red_light:
-                speed = 0
-            elif speed_limit:
-                speed = min(speed, speed_limit)
+                logging.info("Saw red light, stopping.")
+                self.can_controller.set_throttle(0)
+                self.can_controller.set_break(100)
+            else:
+                logging.info(f"Speed: {speed}, Steering: {steering_angle}")
+                self.can_controller.set_steering(steering_angle)
+                self.can_controller.set_throttle(speed)
+                self.can_controller.set_break(0)
 
-            self.can_controller.set_steering(steering_angle)
-            self.can_controller.set_throttle(speed)
-            self.can_controller.set_break(0)
 
-            cv2.imshow("Line Following", viz_img)
+            # Optionally show the frame
+            cv2.imshow("Stitched Output", stitched_frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 

@@ -71,6 +71,27 @@ class ObjectDetection:
         return detections
 
     def process(self, frame):
+        draw_instructions = []
         detections = self.detect_objects(frame)
+        for det in detections:
+            x1, y1, x2, y2 = det['bbox']
+            class_label = det['class']
+            draw_instructions.append({
+                'type': 'rect',
+                'top_left': (x1, y1),
+                'bottom_right': (x2, y2),
+                'color': (0, 255, 0),
+                'thickness': 2
+            })
+
+            draw_instructions.append({
+                'type': 'text',
+                'text': f"{class_label} ({det['distance']:.2f}m)",
+                'org': (x1, y1 - 10),
+                'font': 'FONT_HERSHEY_SIMPLEX',
+                'font_scale': 0.6,
+                'color': (0, 255, 0),
+                'thickness': 2
+            })
         traffic_state = self.traffic_manager.process_traffic_signals(detections)
-        return traffic_state, detections
+        return traffic_state, detections, draw_instructions
