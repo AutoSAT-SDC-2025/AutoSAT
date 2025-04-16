@@ -108,6 +108,9 @@ async def start(self):
             steering_angle += avoidance_steering
             speed *= speed_scale
 
+            #if at crosswalk, ignore steering angle altogether
+
+
 
             # Draw everything
             self.renderer.draw(stitched_frame)

@@ -11,124 +11,181 @@ class LineFollowingNavigation:
         self.scale = scale
 
     def newLines(self, lines):
-        nlines = []
+        processed_lines = []
         if lines is not None:
             clusters = clusterLines(lines, int(self.scale * 10), 15)
             for cluster in clusters:
-                newline = combineLines(cluster)
-                nlines.append(newline)
-            return nlines
+                combined_line = combineLines(cluster)
+                processed_lines.append(combined_line)
+            return processed_lines
         return 0
 
     def splitLines(self, lines):
-        llines = []
-        rlines = []
+        left_lines = []
+        right_lines = []
         for line in lines:
             x1, y1, x2, y2 = line
-            linepar = np.polyfit((x1, x2), (y1, y2), 1)
-            angle = (180 / np.pi) * np.arctan(linepar[0])
+            line_params = np.polyfit((x1, x2), (y1, y2), 1)
+            angle = (180 / np.pi) * np.arctan(line_params[0])
             if angle > 5:
-                rlines.append(line)
+                right_lines.append(line)
             if angle < -5:
-                llines.append(line)
-        return llines, rlines
+                left_lines.append(line)
+        return left_lines, right_lines
 
     def longestLine(self, lines):
-        longest = 0
-        longestline = None
+        max_length = 0
+        longest_line = None
         for line in lines:
             x1, y1, x2, y2 = line
             length = np.sqrt((abs(x2 - x1)) ** 2 + (abs(y2 - y1)) ** 2)
-            if length > longest:
-                longest = length
-                longestline = line
-        return longestline
+            if length > max_length:
+                max_length = length
+                longest_line = line
+        return longest_line
 
-    def findTarget(self, llines, rlines, horizonh, img, wl=1, wr=1, weight=1, bias=0, draw=1):
-        drawimg = cv2.cvtColor(img, cv2.COLOR_BGR2HSV) if draw == 1 else None
+    def findTarget(self, left_lines, right_lines, horizon_height, img, left_weight=1, right_weight=1, weight_factor=1, bias=0, draw=1):
+        visuals = []
 
-        if not llines and not rlines:
-            return False
+        if not left_lines and not right_lines:
+            return False, visuals
 
-        elif not rlines:
-            lline = self.longestLine(llines)
-            x1l, y1l, x2l, y2l = lline
+        elif not right_lines:
+            longest_left_line = self.longestLine(left_lines)
+            x1l, y1l, x2l, y2l = longest_left_line
 
-            lineparL = np.polyfit((x1l, x2l), (y1l, y2l), 1)
-            horizonxL = round((horizonh - lineparL[1]) / lineparL[0])
+            line_params_left = np.polyfit((x1l, x2l), (y1l, y2l), 1)
+            horizon_x_left = round((horizon_height - line_params_left[1]) / line_params_left[0])
 
-            if draw == 1:
-                cv2.line(drawimg, (x1l, y1l), (x2l, y2l), (50, 200, 200), 3)
-                cv2.circle(drawimg, (horizonxL, horizonh), 1, (50, 200, 200), 3)
+            visuals.append({
+                'type': 'line',
+                'start': (x1l, y1l),
+                'end': (x2l, y2l),
+                'color': (50, 200, 200),
+                'thickness': 3
+            })
+            visuals.append({
+                'type': 'circle',
+                'center': (horizon_x_left, horizon_height),
+                'radius': 3,
+                'color': (50, 200, 200),
+                'thickness': -1
+            })
 
-            target = horizonxL
+            target = horizon_x_left
 
-        elif not llines:
-            rline = self.longestLine(rlines)
-            x1r, y1r, x2r, y2r = rline
+        elif not left_lines:
+            longest_right_line = self.longestLine(right_lines)
+            x1r, y1r, x2r, y2r = longest_right_line
 
-            lineparR = np.polyfit((x1r, x2r), (y1r, y2r), 1)
-            horizonxR = round((horizonh - lineparR[1]) / lineparR[0])
+            line_params_right = np.polyfit((x1r, x2r), (y1r, y2r), 1)
+            horizon_x_right = round((horizon_height - line_params_right[1]) / line_params_right[0])
 
-            if draw == 1:
-                cv2.line(drawimg, (x1r, y1r), (x2r, y2r), (100, 200, 200), 3)
-                cv2.circle(drawimg, (horizonxR, horizonh), 1, (100, 200, 200), 3)
+            visuals.append({
+                'type': 'line',
+                'start': (x1r, y1r),
+                'end': (x2r, y2r),
+                'color': (100, 200, 200),
+                'thickness': 3
+            })
+            visuals.append({
+                'type': 'circle',
+                'center': (horizon_x_right, horizon_height),
+                'radius': 3,
+                'color': (100, 200, 200),
+                'thickness': -1
+            })
 
-            target = horizonxR
+            target = horizon_x_right
+
         else:
-            lline = self.longestLine(llines)
-            rline = self.longestLine(rlines)
+            longest_left_line = self.longestLine(left_lines)
+            longest_right_line = self.longestLine(right_lines)
 
-            x1r, y1r, x2r, y2r = rline
-            x1l, y1l, x2l, y2l = lline
+            x1r, y1r, x2r, y2r = longest_right_line
+            x1l, y1l, x2l, y2l = longest_left_line
 
-            lineparR = np.polyfit((x1r, x2r), (y1r, y2r), 1)
-            horizonxR = round((horizonh - lineparR[1]) / lineparR[0])
+            line_params_right = np.polyfit((x1r, x2r), (y1r, y2r), 1)
+            horizon_x_right = round((horizon_height - line_params_right[1]) / line_params_right[0])
 
-            lineparL = np.polyfit((x1l, x2l), (y1l, y2l), 1)
-            horizonxL = round((horizonh - lineparL[1]) / lineparL[0])
+            line_params_left = np.polyfit((x1l, x2l), (y1l, y2l), 1)
+            horizon_x_left = round((horizon_height - line_params_left[1]) / line_params_left[0])
 
-            # Calculate heights at intersections
-            heightL = lineparL[1]
-            heightR = lineparR[0] * self.width + lineparR[1]
+            left_line_height = line_params_left[1]
+            right_line_height = line_params_right[0] * self.width + line_params_right[1]
 
-            # Calculate intersection point
-            x_h = (lineparR[1] - lineparL[1]) / (lineparL[0] - lineparR[0])
-            y_h = x_h * lineparL[0] + lineparL[1]
+            intersection_x = (line_params_right[1] - line_params_left[1]) / (line_params_left[0] - line_params_right[0])
+            intersection_y = intersection_x * line_params_left[0] + line_params_left[1]
 
-            # Ensure weights are positive
-            wl = max(wl, 0.01)
-            wr = max(wr, 0.01)
+            left_weight = max(left_weight, 0.01)
+            right_weight = max(right_weight, 0.01)
 
-            # Calculate target position
-            target = ((horizonxL + horizonxR) / 2) + (heightL - heightR) * weight + bias
+            target = ((horizon_x_left + horizon_x_right) / 2) + (left_line_height - right_line_height) * weight_factor + bias
 
-            if draw == 1:
-                cv2.line(drawimg, (x1r, y1r), (x2r, y2r), (100, 200, 200), 3)
-                cv2.line(drawimg, (x1l, y1l), (x2l, y2l), (50, 200, 200), 3)
-                cv2.circle(drawimg, (round(x_h), round(y_h)), 1, (210, 200, 200), 3)
-                cv2.circle(drawimg, (horizonxR, horizonh), 1, (100, 200, 200), 3)
-                cv2.circle(drawimg, (horizonxL, horizonh), 1, (50, 200, 200), 3)
-                cv2.circle(drawimg, (int(target), horizonh), 1, (180, 200, 200), 3)
+            visuals.extend([
+                {
+                    'type': 'line',
+                    'start': (x1r, y1r),
+                    'end': (x2r, y2r),
+                    'color': (100, 200, 200),
+                    'thickness': 3
+                },
+                {
+                    'type': 'line',
+                    'start': (x1l, y1l),
+                    'end': (x2l, y2l),
+                    'color': (50, 200, 200),
+                    'thickness': 3
+                },
+                {
+                    'type': 'circle',
+                    'center': (round(intersection_x), round(intersection_y)),
+                    'radius': 3,
+                    'color': (210, 200, 200),
+                    'thickness': -1
+                },
+                {
+                    'type': 'circle',
+                    'center': (horizon_x_right, horizon_height),
+                    'radius': 3,
+                    'color': (100, 200, 200),
+                    'thickness': -1
+                },
+                {
+                    'type': 'circle',
+                    'center': (horizon_x_left, horizon_height),
+                    'radius': 3,
+                    'color': (50, 200, 200),
+                    'thickness': -1
+                },
+                {
+                    'type': 'circle',
+                    'center': (int(target), horizon_height),
+                    'radius': 3,
+                    'color': (180, 200, 200),
+                    'thickness': -1
+                }
+            ])
 
-        # Draw center reference point
-        # Draw center reference point
-        if draw == 1:
-            cv2.circle(drawimg, (int(self.width / 2), horizonh), 1, (0, 0, 255), 3)
-            drawimg = cv2.cvtColor(drawimg, cv2.COLOR_HSV2BGR)
-            return target, drawimg
+        # Add center reference point
+        visuals.append({
+            'type': 'circle',
+            'center': (int(self.width / 2), horizon_height),
+            'radius': 3,
+            'color': (0, 0, 255),
+            'thickness': -1
+        })
 
-        return target, None
+        return target, visuals
 
-    def processFrame(self, img, horizonh=280, weight=1, bias=0, draw=1):
+    def processFrame(self, img, horizon_height=280, weight_factor=1, bias=0):
         """Process a frame to find the line following target.
 
         Parameters:
         img (ndarray): Input image frame
-        horizonh (int): Height of the horizon line for target calculation
-        weight (float): Weight factor for line calculation
+        horizon_height (int): Height of the horizon line for target calculation
+        weight_factor (float): Weight factor for line calculation
         bias (float): Bias adjustment for target position
-        draw (int): Flag to enable/disable drawing on the output image
 
         Returns:
         tuple: (target position, visualization image if draw=1)
@@ -143,19 +200,17 @@ class LineFollowingNavigation:
         # Process detected lines
         if lines is not None:
             # Get the new processed lines
-            nlines = self.newLines(lines)
+            processed_lines = self.newLines(lines)
 
             # Split into left and right lines
-            if nlines:
-                llines, rlines = self.splitLines(nlines)
+            if processed_lines:
+                left_lines, right_lines = self.splitLines(processed_lines)
 
                 # Find target based on detected lines
-                return self.findTarget(llines, rlines, horizonh, img, weight=weight, bias=bias, draw=draw)
+                return self.findTarget(left_lines, right_lines, horizon_height, img, weight_factor=weight_factor, bias=bias)
 
         # No valid lines detected
-        if draw == 1:
-            return None, img
-        return None, None
+        return None, img
 
     def calculateSteeringAngle(self, target, mid_point=None):
         """Calculate steering angle based on target position.
@@ -213,7 +268,9 @@ class LineFollowingNavigation:
         tuple: (steering_angle, speed, visualization image if draw=1)
         """
         # Process the frame to find target
-        target, viz_img = self.processFrame(img, draw=draw)
+        target, visuals = self.processFrame(img)
+        if visuals is None:
+            visuals = []
 
         # Calculate steering angle
         steering_angle = self.calculateSteeringAngle(target)
@@ -221,65 +278,36 @@ class LineFollowingNavigation:
         # Calculate speed
         speed = self.calculateSpeed(steering_angle, base_speed)
 
-        visuals = None
+        # Add steering and speed info to visualization
+        if target is not None:
+            text = f"Steering: {steering_angle:.1f} | Speed: {speed:.1f}"
 
-        if draw == 1:
-            visuals = []
-            # Add steering and speed info to visualization
-            if viz_img is not None:
-                text = f"Steering: {steering_angle:.1f} | Speed: {speed:.1f}"
+            visuals.append({
+                'type': 'text',
+                'text': text,
+                'position': (10, 30),
+                'font': 'FONT_HERSHEY_SIMPLEX',
+                'font_scale': 0.7,
+                'color': (0, 0, 255),
+                'thickness': 2
+            })
 
-                visuals.append({
-                    'type': 'text',
-                    'text': text,
-                    'org': (10, 30),
-                    'font': 'FONT_HERSHEY_SIMPLEX',
-                    'font_scale': 0.7,
-                    'color': (0, 0, 255),
-                    'thickness': 2
-                })
+            center_x = int(self.width / 2)
+            center_y = self.height - 50
+            endpoint_x = center_x + int(steering_angle * 2)
 
-                center_x = int(self.width / 2)
-                center_y = self.height - 50
-                endpoint_x = center_x + int(steering_angle * 2)
-
-                visuals.append({
-                    'type': 'line',
-                    'start': (center_x, center_y),
-                    'end': (endpoint_x, center_y - 30),
-                    'color': (0, 255, 0),
-                    'thickness': 3
-                })
-
-            return steering_angle, speed, viz_img, endpoint_x
+            visuals.append({
+                'type': 'line',
+                'start': (center_x, center_y),
+                'end': (endpoint_x, center_y - 30),
+                'color': (0, 255, 0),
+                'thickness': 3
+            })
 
         return steering_angle, speed, visuals
+
 
     def process(self, frame, base_speed=100, draw=1):
         """Process a single frame and return the results."""
         steering_angle, speed, visuals = self.run(frame, base_speed, draw)
         return steering_angle, speed, visuals
-
-
-if __name__ == "__main__":
-    nav = LineFollowingNavigation(width=848, height=480)
-    cap = cv2.VideoCapture("../../../../assets/default.mp4")
-
-    if not cap.isOpened():
-        print("Error: Could not open video file.")
-        exit()
-
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        steering_angle, speed, viz_img, end_x = nav.run(frame)
-
-        cv2.imshow("Line Following", viz_img)
-
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()

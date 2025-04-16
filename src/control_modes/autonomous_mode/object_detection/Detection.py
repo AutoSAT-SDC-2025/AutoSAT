@@ -5,7 +5,7 @@ from yolov5.models.common import DetectMultiBackend
 from yolov5.utils.general import non_max_suppression, scale_boxes, check_img_size
 from yolov5.utils.torch_utils import select_device
 
-from TrafficDetection import TrafficManager
+from .TrafficDetection import TrafficManager
 
 
 class ObjectDetection:
@@ -87,7 +87,7 @@ class ObjectDetection:
             draw_instructions.append({
                 'type': 'text',
                 'text': f"{class_label} ({det['distance']:.2f}m)",
-                'org': (x1, y1 - 10),
+                'position': (x1, y1 - 10),
                 'font': 'FONT_HERSHEY_SIMPLEX',
                 'font_scale': 0.6,
                 'color': (0, 255, 0),
