@@ -11,7 +11,7 @@ from .Render import Renderer
 def main(weights_path: str, input_source: str, video_path: str = None):
     object_detector = ObjectDetection(weights_path, input_source)
     traffic_manager = TrafficManager()
-    nav = LineFollowingNavigation(width=848, height=480)
+    line_detection = LineFollowingNavigation(width=848, height=480)
     renderer = Renderer()
     
 
@@ -27,7 +27,7 @@ def main(weights_path: str, input_source: str, video_path: str = None):
         traffic_state, detections, object_visuals = object_detector.process(frame)
         renderer.add_drawings(object_visuals)
 
-        steering_angle, speed, line_visuals = nav.process(frame)
+        steering_angle, speed, line_visuals = line_detection.process(frame)
         renderer.add_drawings(line_visuals)
 
         renderer.draw(frame)

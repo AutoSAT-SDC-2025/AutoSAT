@@ -31,6 +31,8 @@ from can_worker import CanWorker, initialize_can
 from camera_utils import initialize_cameras, getHorizon
 from line_detection import getLines, newLines, splitLines, findTarget
 from object_detection import initialize, traffic_object_detection, adjust_throttle
+from ..line_detection.LineDetection import LineFollowingNavigation
+from ....util.Render import Renderer
 
 
 from src.can_interface.can_factory import select_can_controller_creator, create_can_controller
@@ -51,7 +53,8 @@ def main():
     can_controller = create_can_controller(can_creator, bus)
     can_controller.start()
     # setup_listeners(can_controller, car_type)
-
+    line_detection = LineFollowingNavigation(width=width, height=height)
+    renderer = Renderer()
     # Initialize cameras
     cameras = initialize_cameras()
     front_camera = cameras["front"]
@@ -193,56 +196,60 @@ def main():
                 # throttle_msg.data = [throttle_index, 0, 1, 0, 0, 0, 0, 0]
 
                 # Steering part
-                lines = getLines(frame)
-                if lines is not None:
-                    lines = newLines(lines)
-                    llines, rlines = splitLines(lines)
-
-                    wl = 1
-                    wr = 1
-
-                    if car_spotted and not car_passed:
-                        print(".")
-                        if t0 == 0:
-                            t0 = timestamp
-                            tprev = timestamp
-                            print("CAR SPOTTED")
-                        tnow = timestamp - t0
-                        speed = int(struct.unpack(">H", bytearray(values["speed_sensor"][:2]))[0]) if values["speed_sensor"] else 0
-                        speed = int(speed / 36)
-                        distance_change = speed * (tnow - tprev)
-                        distance_driven += distance_change
-                        tprev = tnow
-
-                        if distance_driven < 5:
-                            target = findTarget(llines, rlines, hy, frame, wl, wr, weight=0, bias=-400, draw=0)
-                            print("Going Left")
-                        elif distance_driven < 12:
-                            target = findTarget(llines, rlines, hy, frame, wl, wr, weight=1, bias=0, draw=0)
-                            print("Going Straight")
-                        elif distance_driven < 17:
-                            target = findTarget(llines, rlines, hy, frame, wl, wr, weight=0, bias=400, draw=0)
-                            print("Going Right")
-                        else:
-                            print("Overtaking Completed")
-                            car_passed = True
-                    else:
-                        target = findTarget(llines, rlines, hy, frame, wl, wr, weight=1, bias=0, draw=0)
-
-                    if target is False:
-                        print("ERROR, NO LINES FOUND")
-                        throttle_msg_data = [1, 0, 1, 0, 0, 0, 0, 0]
-                        steer_angle = 0
-                    else:
-                        Error = target - width / 2
-                        if Error > 0:
-                            steer_angle = min(Error / (width / 2), 1.05)
-                        else:
-                            steer_angle = max(Error / (width / 2), -1.05)
-                else:
-                    print("ERROR, NO LINES FOUND")
-                    throttle_msg_data = [1, 0, 1, 0, 0, 0, 0, 0]
-                    steer_angle = 0
+                # lines = getLines(frame)
+                # if lines is not None:
+                #     lines = newLines(lines)
+                #     llines, rlines = splitLines(lines)
+                #
+                #     wl = 1
+                #     wr = 1
+                #
+                #     if car_spotted and not car_passed:
+                #         print(".")
+                #         if t0 == 0:
+                #             t0 = timestamp
+                #             tprev = timestamp
+                #             print("CAR SPOTTED")
+                #         tnow = timestamp - t0
+                #         speed = int(struct.unpack(">H", bytearray(values["speed_sensor"][:2]))[0]) if values["speed_sensor"] else 0
+                #         speed = int(speed / 36)
+                #         distance_change = speed * (tnow - tprev)
+                #         distance_driven += distance_change
+                #         tprev = tnow
+                #
+                #         if distance_driven < 5:
+                #             target = findTarget(llines, rlines, hy, frame, wl, wr, weight=0, bias=-400, draw=0)
+                #             print("Going Left")
+                #         elif distance_driven < 12:
+                #             target = findTarget(llines, rlines, hy, frame, wl, wr, weight=1, bias=0, draw=0)
+                #             print("Going Straight")
+                #         elif distance_driven < 17:
+                #             target = findTarget(llines, rlines, hy, frame, wl, wr, weight=0, bias=400, draw=0)
+                #             print("Going Right")
+                #         else:
+                #             print("Overtaking Completed")
+                #             car_passed = True
+                #     else:
+                #         target = findTarget(llines, rlines, hy, frame, wl, wr, weight=1, bias=0, draw=0)
+                #
+                #     if target is False:
+                #         print("ERROR, NO LINES FOUND")
+                #         throttle_msg_data = [1, 0, 1, 0, 0, 0, 0, 0]
+                #         steer_angle = 0
+                #     else:
+                #         Error = target - width / 2
+                #         if Error > 0:
+                #             steer_angle = min(Error / (width / 2), 1.05)
+                #         else:
+                #             steer_angle = max(Error / (width / 2), -1.05)
+                # else:
+                #     print("ERROR, NO LINES FOUND")
+                #     throttle_msg_data = [1, 0, 1, 0, 0, 0, 0, 0]
+                #     steer_angle = 0
+                renderer.clear()
+                steer_angle, speed, line_visuals = line_detection.process(frame)
+                renderer.add_drawings(line_visuals)
+                renderer.draw(frame)
 
                 # steering_msg.data = list(bytearray(struct.pack("f", float(steer_angle)))) + [0] * 4
                 # steering_task.modify_data(steering_msg)
