@@ -13,9 +13,10 @@ def main(weights_path: str, input_source: str, video_path: str = None):
     traffic_manager = TrafficManager()
     line_detection = LineFollowingNavigation(width=848, height=480)
     renderer = Renderer()
-    
 
-    cap = cv2.VideoCapture(video_path)
+
+
+    cap = cv2.VideoCapture(0)
 
     
     while cap.isOpened():

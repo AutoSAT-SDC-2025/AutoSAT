@@ -76,6 +76,7 @@ class ObjectDetection:
         for det in detections:
             x1, y1, x2, y2 = det['bbox']
             class_label = det['class']
+
             draw_instructions.append({
                 'type': 'rect',
                 'top_left': (x1, y1),

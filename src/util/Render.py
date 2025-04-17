@@ -6,6 +6,7 @@ class Renderer:
         self.draw_ops = []
 
     def add_drawings(self, new_ops: list):
+        # Provide a list of drawing operations to be added,
         self.draw_ops.extend(new_ops)
 
     def clear(self):
