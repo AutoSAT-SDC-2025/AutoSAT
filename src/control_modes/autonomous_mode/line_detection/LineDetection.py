@@ -306,7 +306,6 @@ class LineFollowingNavigation:
 
         return steering_angle, speed, visuals
 
-
     def process(self, frame, base_speed=100, draw=1):
         """Process a single frame and return the results."""
         steering_angle, speed, visuals = self.run(frame, base_speed, draw)

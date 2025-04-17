@@ -30,8 +30,7 @@ def main(weights_path: str, input_source: str, video_path: str = None):
         steering_angle, speed, line_visuals = line_detection.process(frame)
         renderer.add_drawings(line_visuals)
 
-        renderer.draw(frame)
-        cv2.imshow('Traffic Detection', frame)
+        renderer.render(frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
     

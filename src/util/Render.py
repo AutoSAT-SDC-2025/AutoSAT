@@ -1,5 +1,6 @@
 import cv2
 
+
 class Renderer:
     def __init__(self):
         self.draw_ops = []
@@ -10,7 +11,7 @@ class Renderer:
     def clear(self):
         self.draw_ops = []
 
-    def draw(self, frame):
+    def render(self, frame):
         for op in self.draw_ops:
             try:
                 if op["type"] == "line":
@@ -25,3 +26,4 @@ class Renderer:
                     cv2.circle(frame, op["center"], op["radius"], op["color"], op["thickness"])
             except Exception as e:
                 print(f"[Renderer] Failed to draw op {op}: {e}")
+            cv2.imshow('Traffic Detection', frame)

@@ -249,7 +249,7 @@ def main():
                 renderer.clear()
                 steer_angle, speed, line_visuals = line_detection.process(frame)
                 renderer.add_drawings(line_visuals)
-                renderer.draw(frame)
+                renderer.render(frame)
 
                 # steering_msg.data = list(bytearray(struct.pack("f", float(steer_angle)))) + [0] * 4
                 # steering_task.modify_data(steering_msg)
