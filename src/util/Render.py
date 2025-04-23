@@ -27,4 +27,4 @@ class Renderer:
                     cv2.circle(frame, op["center"], op["radius"], op["color"], op["thickness"])
             except Exception as e:
                 print(f"[Renderer] Failed to draw op {op}: {e}")
-            cv2.imshow('Traffic Detection', frame)
+        cv2.imshow('Traffic Detection', frame)

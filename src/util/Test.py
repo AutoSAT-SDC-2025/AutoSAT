@@ -8,21 +8,25 @@ from ..control_modes.autonomous_mode.line_detection.LineDetection import LineFol
 
 from .Render import Renderer
 
+
 def main(weights_path: str, input_source: str, video_path: str = None):
     object_detector = ObjectDetection(weights_path, input_source)
     traffic_manager = TrafficManager()
-    line_detection = LineFollowingNavigation(width=848, height=480)
+    line_detection = LineFollowingNavigation(width=1920, height=1080)
     renderer = Renderer()
 
-
+    # cap = cv2.VideoCapture(2)
+    # cap = cv2.VideoCapture("D:\\gebruiker\\Pictures\\Camera Roll\\WIN_20250422_10_57_58_Pro.mp4")
 
     cap = cv2.VideoCapture(0)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
 
-    
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
+
         renderer.clear()
 
         traffic_state, detections, object_visuals = object_detector.process(frame)
@@ -32,11 +36,12 @@ def main(weights_path: str, input_source: str, video_path: str = None):
         renderer.add_drawings(line_visuals)
 
         renderer.render(frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        if cv2.waitKey(100) & 0xFF == ord('q'):
             break
-    
+
     cap.release()
     cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
     print("Current working dir:", os.getcwd())
