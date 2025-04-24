@@ -9,8 +9,8 @@ from ...control_modes.autonomous_mode.object_detection.TrafficDetection import T
 from ...can_interface.bus_connection import connect_to_can_interface, disconnect_from_can_interface
 from ...can_interface.can_factory import select_can_controller_creator, create_can_controller
 from ...util.Render import Renderer
-from navigation.modes.Checkpoint import Checkpoint
-from stitching import Stitcher
+#from navigation.modes.Checkpoint import Checkpoint
+#from stitching import Stitcher
 
 import cv2
 import logging
@@ -28,19 +28,13 @@ def get_connected_cameras(max_devices=5):
     return cameras
 
 
-def stitch_frames(frames: list) -> any:
-    if not DO_STITCH:
-        return frames[0]
-    stitcher = Stitcher()
-    result = stitcher.stitch(frames)
-    return result
+
 WIDTH = 608
 HEIGHT = 320
 
 class AutonomousMode(IControlMode, ABC):
     def __init__(self, car_type: CarType, use_checkpoint_mode=False):
         self.car_type = car_type
-        self.use_checkpoint_mode = use_checkpoint_mode
         # self.checkpoint_nav = Checkpoint() if self.use_checkpoint_mode else None
         self.can_bus = connect_to_can_interface(0)
 
@@ -50,7 +44,6 @@ class AutonomousMode(IControlMode, ABC):
         self.car_seen_counter = 0
         self.car_on_left = False
         self.nav = LineFollowingNavigation(width=WIDTH, height=HEIGHT)
-        self.car_avoidance = Avoidance()
         self.object_detector = ObjectDetection(weights_path='assets/v5_model.pt', input_source='video')
         self.traffic_manager = TrafficManager()
 
