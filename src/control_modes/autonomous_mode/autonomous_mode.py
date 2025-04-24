@@ -34,13 +34,14 @@ def stitch_frames(frames: list) -> any:
     stitcher = Stitcher()
     result = stitcher.stitch(frames)
     return result
-
+WIDTH = 608
+HEIGHT = 320
 
 class AutonomousMode(IControlMode, ABC):
     def __init__(self, car_type: CarType, use_checkpoint_mode=False):
         self.car_type = car_type
         self.use_checkpoint_mode = use_checkpoint_mode
-        self.checkpoint_nav = Checkpoint() if self.use_checkpoint_mode else None
+        # self.checkpoint_nav = Checkpoint() if self.use_checkpoint_mode else None
         self.can_bus = connect_to_can_interface(0)
 
         self.can_creator = select_can_controller_creator(self.car_type)
@@ -48,7 +49,7 @@ class AutonomousMode(IControlMode, ABC):
 
         self.car_seen_counter = 0
         self.car_on_left = False
-        self.nav = LineFollowingNavigation(width=848, height=480)
+        self.nav = LineFollowingNavigation(width=WIDTH, height=HEIGHT)
         self.car_avoidance = Avoidance()
         self.object_detector = ObjectDetection(weights_path='assets/v5_model.pt', input_source='video')
         self.traffic_manager = TrafficManager()
@@ -69,26 +70,28 @@ async def start(self):
             logging.info("Checkpoint mode active. Delegating control to Checkpoint navigator.")
             await self.checkpoint_nav.start()
             return
-        cap = cv2.VideoCapture('assets/default.mp4')
+        cap = cv2.VideoCapture(0)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT)
         if not cap.isOpened():
             logging.error("Error: Could not open video file.")
             return
 
-        camera_ids = get_connected_cameras()
-        caps = [cv2.VideoCapture(cam_id) for cam_id in camera_ids]
+        # camera_ids = get_connected_cameras()
+        # caps = [cv2.VideoCapture(cam_id) for cam_id in camera_ids]
 
         while True:
-            frames = []
-            for cap in caps:
-                ret, frame = cap.read()
-                if not ret:
-                    continue
-                frames.append(frame)
+            # frames = []
+            # for cap in caps:
+            #     ret, frame = cap.read()
+            #     if not ret:
+            #         continue
+            #     frames.append(frame)
+            #
+            # if not frames:
+            #     continue
 
-            if not frames:
-                continue
-
-            stitched_frame = frames[0] if len(frames) == 1 else stitch_frames(frames)
+            ret, stitched_frame = cap.read()
 
             # Clear previous drawings before new frame
             self.renderer.clear()
@@ -102,11 +105,11 @@ async def start(self):
             saw_red_light = traffic_state['red_light']
             speed_limit = traffic_state['speed_limit']
 
-            avoidance_steering, speed_scale, avoidance_drawings = self.car_avoidance.process(stitched_frame, detections)
-            self.renderer.add_drawings(avoidance_drawings)
+           # avoidance_steering, speed_scale, avoidance_drawings = self.car_avoidance.process(stitched_frame, detections)
+           # self.renderer.add_drawings(avoidance_drawings)
 
-            steering_angle += avoidance_steering
-            speed *= speed_scale
+           # steering_angle += avoidance_steering
+           # speed *= speed_scale
 
             # Draw everything
             self.renderer.draw(stitched_frame)
