@@ -19,6 +19,7 @@ def main(weights_path: str, input_source: str, video_path: str = None):
 
     # source = "D:\\gebruiker\\Pictures\\Camera Roll\\WIN_20250422_10_57_58_Pro.mp4"
     source = 0
+    print("Using capture source:", source)
 
     cap = cv2.VideoCapture(source)
 
