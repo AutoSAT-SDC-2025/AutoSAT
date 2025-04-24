@@ -8,19 +8,30 @@ from ..control_modes.autonomous_mode.line_detection.LineDetection import LineFol
 
 from .Render import Renderer
 
+WIDTH = 600 # maintain ratio
+HEIGHT = 340 # maintain ratio
 
 def main(weights_path: str, input_source: str, video_path: str = None):
     object_detector = ObjectDetection(weights_path, input_source)
     traffic_manager = TrafficManager()
-    line_detection = LineFollowingNavigation(width=1920, height=1080)
+    line_detection = LineFollowingNavigation(width=WIDTH, height=HEIGHT)
     renderer = Renderer()
 
-    # cap = cv2.VideoCapture(2)
-    # cap = cv2.VideoCapture("D:\\gebruiker\\Pictures\\Camera Roll\\WIN_20250422_10_57_58_Pro.mp4")
+    # source = "D:\\gebruiker\\Pictures\\Camera Roll\\WIN_20250422_10_57_58_Pro.mp4"
+    source = 0
 
-    cap = cv2.VideoCapture(0)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+    cap = cv2.VideoCapture(source)
+
+    if isinstance(source, str):
+        cap = cv2.VideoCapture(source)
+    else:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT)
+        line_detection.setResolution(WIDTH, HEIGHT)
+        cap = cv2.VideoCapture(source)
+
+    #cap = cv2.VideoCapture(1)
+
 
     while cap.isOpened():
         ret, frame = cap.read()
@@ -36,7 +47,7 @@ def main(weights_path: str, input_source: str, video_path: str = None):
         renderer.add_drawings(line_visuals)
 
         renderer.render(frame)
-        if cv2.waitKey(100) & 0xFF == ord('q'):
+        if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
     cap.release()

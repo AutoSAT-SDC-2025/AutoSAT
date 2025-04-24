@@ -58,16 +58,14 @@ def filterWhite(img_masked, height, width):
     sidemargin = 4
     mask = np.ones_like(img_masked)
     mask = mask * 255
-    
-    for row in range(round((height - hstart) / window_size)):
-        for col in range(round((width - 2 * sidemargin) / window_size)):
-            window = img_masked[row * window_size + hstart:row * window_size + window_size + hstart,
-                                 col * window_size + sidemargin:col * window_size + window_size + sidemargin]
+
+    for row in range(hstart, height - window_size + 1, window_size):
+        for col in range(sidemargin, width - window_size - sidemargin + 1, window_size):
+            window = img_masked[row:row + window_size, col:col + window_size]
             density = np.mean(window)
             if density > 45:
-                mask[row * window_size + hstart:row * window_size + window_size + hstart,
-                     col * window_size + sidemargin:col * window_size + window_size + sidemargin] = np.zeros([window_size, window_size])
-    
+                mask[row:row + window_size, col:col + window_size] = 0
+
     img_masked = cv2.bitwise_and(img_masked, mask)
     return img_masked
 

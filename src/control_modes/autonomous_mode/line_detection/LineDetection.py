@@ -256,6 +256,10 @@ class LineFollowingNavigation:
 
         return max(speed, base_speed * 0.5)
 
+    def setResolution(self, width, height):
+        self.width = width
+        self.height = height
+
     def run(self, img, base_speed=100, draw=1):
         """Run the line following algorithm on a frame.
 
