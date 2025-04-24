@@ -8,8 +8,8 @@ from ..control_modes.autonomous_mode.line_detection.LineDetection import LineFol
 
 from .Render import Renderer
 
-WIDTH = 608
-HEIGHT = 320
+WIDTH = 848
+HEIGHT = 480
 
 def main(weights_path: str, input_source: str, video_path: str = None):
     object_detector = ObjectDetection(weights_path, input_source)
@@ -18,9 +18,9 @@ def main(weights_path: str, input_source: str, video_path: str = None):
     renderer = Renderer()
 
     # cap = cv2.VideoCapture(2)
-    # cap = cv2.VideoCapture("D:\\gebruiker\\Pictures\\Camera Roll\\WIN_20250422_10_57_58_Pro.mp4")
+    cap = cv2.VideoCapture("D:\\gebruiker\\Downloads\\Car.mp4")
 
-    cap = cv2.VideoCapture(0)
+    # cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT)
 

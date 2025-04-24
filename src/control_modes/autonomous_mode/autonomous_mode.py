@@ -74,7 +74,7 @@ async def start(self):
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT)
         if not cap.isOpened():
-            logging.error("Error: Could not open video file.")
+            logging.error("Error: Could not open video channel.")
             return
 
         # camera_ids = get_connected_cameras()
@@ -96,6 +96,9 @@ async def start(self):
             # Clear previous drawings before new frame
             self.renderer.clear()
 
+            #576 and -576 are steering values. we get angles.
+
+
             steering_angle, speed, line_visuals = self.nav.process(stitched_frame)
             self.renderer.add_drawings(line_visuals)
             # === Object detection & traffic ===
@@ -116,14 +119,12 @@ async def start(self):
 
             if saw_red_light:
                 logging.info("Saw red light, stopping.")
-                self.can_controller.set_throttle(0)
-                self.can_controller.set_break(100)
+                self.can_controller.set_steering_and_throttle(0, 0)
+                self.can_controller.set_parking_mode(1)
             else:
                 logging.info(f"Speed: {speed}, Steering: {steering_angle}")
-                self.can_controller.set_steering(steering_angle)
-                self.can_controller.set_throttle(speed)
-                self.can_controller.set_break(0)
-
+                self.can_controller.set_steering_and_throttle(steering_angle * 10, 100)
+                self.can_controller.set_parking_mode(0)
 
             # Optionally show the frame
             cv2.imshow("Stitched Output", stitched_frame)

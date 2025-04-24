@@ -1,7 +1,7 @@
 import logging
 from src.car_variables import CarType
-from src.control_modes.autonomous_mode.old_twente_code import go, new_go
 from src.control_modes.manual_mode.manual_mode import ManualMode
+from src.control_modes.autonomous_mode.autonomous_mode import AutonomousMode
 
 
 def main():
@@ -19,7 +19,8 @@ def main():
         manual = ManualMode(CarType(car))
         manual.start()
     elif mode == "2":
-        new_go.main()
+        auto = AutonomousMode(CarType(car))
+        auto.start()
     # go.main()
 
 if __name__ == "__main__":
