@@ -8,8 +8,8 @@ from ..control_modes.autonomous_mode.line_detection.LineDetection import LineFol
 
 from .Render import Renderer
 
-WIDTH = 1920
-HEIGHT = 1080
+WIDTH = 608
+HEIGHT = 320
 
 def main(weights_path: str, input_source: str, video_path: str = None):
     object_detector = ObjectDetection(weights_path, input_source)
