@@ -27,21 +27,5 @@ class ICanController(ABC):
         pass
 
     @abstractmethod
-    def get_throttle_value(self) -> float:
-        pass
-
-    @abstractmethod
-    def get_steering_angle(self) -> float:
-        pass
-
-    @abstractmethod
-    def get_brake_value(self) -> int:
-        pass
-
-    @abstractmethod
-    def get_gearbox_state(self):
-        pass
-
-    @abstractmethod
     def start(self) -> None:
         pass
