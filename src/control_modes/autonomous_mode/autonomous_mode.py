@@ -105,7 +105,7 @@ class AutonomousMode(IControlMode, ABC):
                # speed *= speed_scale
 
                 # Draw everything
-                self.renderer.draw(stitched_frame)
+                self.renderer.render(stitched_frame)
 
                 if saw_red_light:
                     logging.info("Saw red light, stopping.")
