@@ -117,7 +117,6 @@ class AutonomousMode(IControlMode, ABC):
                 #     self.can_controller.set_parking_mode(0)
 
                 # Optionally show the frame
-                cv2.imshow("Stitched Output", stitched_frame)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
