@@ -106,15 +106,15 @@ class AutonomousMode(IControlMode, ABC):
 
                 # Draw everything
                 self.renderer.render(stitched_frame)
-
-                if saw_red_light:
-                    logging.info("Saw red light, stopping.")
-                    self.can_controller.set_steering_and_throttle(0, 0)
-                    self.can_controller.set_parking_mode(1)
-                else:
-                    logging.info(f"Speed: {speed}, Steering: {steering_angle}")
-                    self.can_controller.set_steering_and_throttle(steering_angle * 10, 100)
-                    self.can_controller.set_parking_mode(0)
+                #
+                # if saw_red_light:
+                #     logging.info("Saw red light, stopping.")
+                #     self.can_controller.set_steering_and_throttle(0, 0)
+                #     self.can_controller.set_parking_mode(1)
+                # else:
+                #     logging.info(f"Speed: {speed}, Steering: {steering_angle}")
+                #     self.can_controller.set_steering_and_throttle(steering_angle * 10, 100)
+                #     self.can_controller.set_parking_mode(0)
 
                 # Optionally show the frame
                 cv2.imshow("Stitched Output", stitched_frame)
