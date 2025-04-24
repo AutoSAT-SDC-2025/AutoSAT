@@ -42,6 +42,10 @@ class HunterCanController(ICanController):
 
     def set_throttle(self, throttle_value: float) -> None:
         pass
+    def set_kart_gearbox(self, kart_gearbox) -> None:
+        pass
+    def set_break(self, break_value: int) -> None:
+        pass
 
     def set_steering_and_throttle(self, steering_angle: float, throttle_value: float) -> None:
         steering_angle_bytes = struct.pack('>h', int(steering_angle))
