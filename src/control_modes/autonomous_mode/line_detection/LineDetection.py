@@ -314,9 +314,21 @@ class LineFollowingNavigation:
                 'thickness': 3
             })
 
+
         return steering_angle, speed, visuals
 
     def process(self, frame, base_speed=100, draw=1):
         """Process a single frame and return the results."""
         steering_angle, speed, visuals = self.run(frame, base_speed, draw)
+
+        offset_y = self.height // 2
+        for vis in visuals:
+            if vis['type'] == 'line':
+                vis['start'] = (vis['start'][0], vis['start'][1] + offset_y)
+                vis['end'] = (vis['end'][0], vis['end'][1] + offset_y)
+            elif vis['type'] == 'circle':
+                vis['center'] = (vis['center'][0], vis['center'][1] + offset_y)
+            elif vis['type'] == 'text':
+                vis['position'] = (vis['position'][0], vis['position'][1] + offset_y)
+
         return steering_angle, speed, visuals
