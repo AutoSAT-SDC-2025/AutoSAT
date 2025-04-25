@@ -48,6 +48,14 @@ class AutonomousMode(IControlMode, ABC):
         self.renderer = Renderer()
 
 
+    def adjust_steering(self, steering_angle):
+        new_steering_angle = steering_angle * 576 / 90
+        if new_steering_angle > 576:
+            new_steering_angle = 576
+        elif new_steering_angle < -576:
+            new_steering_angle = -576
+        return new_steering_angle
+
     def start(self):
         logging.info("Starting autonomous mode...")
         try:
@@ -112,7 +120,7 @@ class AutonomousMode(IControlMode, ABC):
                     self.can_controller.set_parking_mode(1)
                 else:
                     logging.info(f"Speed: {speed}, Steering: {steering_angle}")
-                    self.can_controller.set_steering_and_throttle(steering_angle * 10, 100)
+                    self.can_controller.set_steering_and_throttle(-(steering_angle * 19), 100)
                     self.can_controller.set_parking_mode(0)
 
                 # Optionally show the frame
