@@ -276,7 +276,8 @@ class LineFollowingNavigation:
         # Process the frame to find target
 
         #We only want to use the bottom-half of the image.
-        img = img[int(self.height / 2):, :]
+      #  img = img[int(self.height / 2):, :]
+
 
         target, visuals = self.processFrame(img)
         if visuals is None:
@@ -314,13 +315,9 @@ class LineFollowingNavigation:
                 'thickness': 3
             })
 
-
         return steering_angle, speed, visuals
 
     def process(self, frame, base_speed=100, draw=1):
         """Process a single frame and return the results."""
         steering_angle, speed, visuals = self.run(frame, base_speed, draw)
-
-
-
         return steering_angle, speed, visuals
