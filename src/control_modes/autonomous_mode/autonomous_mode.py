@@ -120,7 +120,7 @@ class AutonomousMode(IControlMode, ABC):
                     self.can_controller.set_parking_mode(1)
                 else:
                     logging.info(f"Speed: {speed}, Steering: {steering_angle}")
-                    self.can_controller.set_steering_and_throttle(-(steering_angle * 19), 200)
+                    self.can_controller.set_steering_and_throttle(-(steering_angle * 19), 320)
                     self.can_controller.set_parking_mode(0)
 
                 # Optionally show the frame
