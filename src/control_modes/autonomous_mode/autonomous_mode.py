@@ -28,14 +28,12 @@ def get_connected_cameras(max_devices=5):
     return cameras
 
 
-
-WIDTH = 608
-HEIGHT = 320
+WIDTH = 848
+HEIGHT = 480
 
 class AutonomousMode(IControlMode, ABC):
     def __init__(self, car_type: CarType, use_checkpoint_mode=False):
         self.car_type = car_type
-        # self.checkpoint_nav = Checkpoint() if self.use_checkpoint_mode else None
         self.can_bus = connect_to_can_interface(0)
 
         self.can_creator = select_can_controller_creator(self.car_type)
