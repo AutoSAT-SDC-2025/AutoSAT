@@ -18,9 +18,9 @@ def main(weights_path: str, input_source: str, video_path: str = None):
     renderer = Renderer()
 
     # cap = cv2.VideoCapture(2)
-    cap = cv2.VideoCapture("D:\\gebruiker\\Downloads\\Car.mp4")
+   # cap = cv2.VideoCapture("D:\\gebruiker\\Downloads\\Car.mp4")
 
-    # cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT)
 
