@@ -28,6 +28,8 @@ def get_connected_cameras(max_devices=5):
     return cameras
 
 
+
+
 WIDTH = 848
 HEIGHT = 480
 
