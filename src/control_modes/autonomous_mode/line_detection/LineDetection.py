@@ -263,6 +263,8 @@ class LineFollowingNavigation:
     def run(self, img, base_speed=100, draw=1):
         """Run the line following algorithm on a frame.
 
+
+
         Parameters:
         img: Input image frame from camera/video
         base_speed: Base speed value
@@ -272,6 +274,10 @@ class LineFollowingNavigation:
         tuple: (steering_angle, speed, visualization image if draw=1)
         """
         # Process the frame to find target
+
+        #We only want to use the bottom-half of the image.
+        img = img[int(self.height / 2):, :]
+
         target, visuals = self.processFrame(img)
         if visuals is None:
             visuals = []
