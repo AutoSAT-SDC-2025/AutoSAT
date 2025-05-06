@@ -1,4 +1,4 @@
-# AutoSAT
+o# AutoSAT
 The code for the RDW Self Driving Challenge 2025 developed by the Saxion team
 
 ## Getting bluetooth to work with the controller
@@ -27,10 +27,18 @@ To test that everything works install the joystick package `sudo apt-get install
 
 In case rumble breaks again this one file needs to modified like in [here](https://github.com/atar-axis/xpadneo/commit/4a3a623b5facca8184e9070317fea03adc3a9e8f), but keep an eye out for any issues on the main page of [xpadneo](https://github.com/atar-axis/xpadneo/).
 
-### Getting the cameras working
+### Set permissions for current user
 
 To get access to the camera feeds you need to add yourself to the video group.
 
-``sudo usermod -a -G video <username>`` replace username with your username
+Run ``sudo usermod -a -G video <username>`` and replace username with your username.
 
-After running the command log out and log back in and it should work.
+To get access to the controller you need to add yourself to the input group.
+
+Run ``sudo usermod -a -G input <username>`` and replace username with your username.
+
+To manage network interfaces you need to add yourself to the netdev group.
+
+Run ``sudo usermod -a -G netdev <username>`` and replace username with your username.
+
+Log out and log back in and the permissions will be set.
