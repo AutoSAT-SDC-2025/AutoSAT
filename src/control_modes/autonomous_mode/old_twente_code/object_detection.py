@@ -31,7 +31,7 @@ def initialize(weights_path, output_dir_base):
     print(f"Detections Directory Created: {detections_dir}")
 
     # Load model once
-    device = select_device('CPU')
+    device = select_device('CPU') #cuda:0 for gpu
     model = load_model(weights_path, device)
 
     quantized_model = quantize_model(model)
