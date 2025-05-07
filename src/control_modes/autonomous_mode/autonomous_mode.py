@@ -9,8 +9,8 @@ from ...control_modes.autonomous_mode.object_detection.TrafficDetection import T
 from ...can_interface.bus_connection import connect_to_can_interface, disconnect_from_can_interface
 from ...can_interface.can_factory import select_can_controller_creator, create_can_controller
 from ...util.Render import Renderer
-#from navigation.modes.Checkpoint import Checkpoint
-#from stitching import Stitcher
+# from navigation.modes.Checkpoint import Checkpoint
+# from stitching import Stitcher
 
 import cv2
 import logging
@@ -28,10 +28,13 @@ def get_connected_cameras(max_devices=5):
     return cameras
 
 
-
+if __name__ == '__main__':
+    cameras = get_connected_cameras()
+    print(f"Connected cameras: {cameras}")
 
 WIDTH = 848
 HEIGHT = 480
+
 
 class AutonomousMode(IControlMode, ABC):
     def __init__(self, car_type: CarType, use_checkpoint_mode=False):
@@ -49,7 +52,6 @@ class AutonomousMode(IControlMode, ABC):
 
         self.renderer = Renderer()
 
-
     def adjust_steering(self, steering_angle):
         new_steering_angle = steering_angle * 576 / 90
         if new_steering_angle > 576:
@@ -66,7 +68,6 @@ class AutonomousMode(IControlMode, ABC):
                 self.can_controller.set_kart_gearbox(KartGearBox.forward)
             elif self.car_type == CarType.hunter:
                 self.can_controller.set_control_mode(HunterControlMode.command_mode)
-
 
             cap = cv2.VideoCapture(0)
 
@@ -95,8 +96,7 @@ class AutonomousMode(IControlMode, ABC):
                 # Clear previous drawings before new frame
                 self.renderer.clear()
 
-                #576 and -576 are steering values. we get angles.
-
+                # 576 and -576 are steering values. we get angles.
 
                 steering_angle, speed, line_visuals = self.nav.process(stitched_frame)
                 self.renderer.add_drawings(line_visuals)
@@ -107,11 +107,11 @@ class AutonomousMode(IControlMode, ABC):
                 saw_red_light = traffic_state['red_light']
                 speed_limit = traffic_state['speed_limit']
 
-               # avoidance_steering, speed_scale, avoidance_drawings = self.car_avoidance.process(stitched_frame, detections)
-               # self.renderer.add_drawings(avoidance_drawings)
+                # avoidance_steering, speed_scale, avoidance_drawings = self.car_avoidance.process(stitched_frame, detections)
+                # self.renderer.add_drawings(avoidance_drawings)
 
-               # steering_angle += avoidance_steering
-               # speed *= speed_scale
+                # steering_angle += avoidance_steering
+                # speed *= speed_scale
 
                 # Draw everything
                 self.renderer.render(stitched_frame)
@@ -135,7 +135,6 @@ class AutonomousMode(IControlMode, ABC):
             self.stop()
             cap.release()
             cv2.destroyAllWindows()
-
 
     def stop(self) -> None:
         logging.info("Stopping autonomous mode.")

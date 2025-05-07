@@ -44,9 +44,26 @@ def main(weights_path: str, input_source: str, video_path: str = None):
     cap.release()
     cv2.destroyAllWindows()
 
+def get_connected_cameras(max_devices=5):
+    # Laptop: 0, 1, 2
+    cameras = []
+    for idx in range(max_devices):
+        cap = cv2.VideoCapture(idx)
+        if cap.read()[0]:
+            cameras.append(idx)
+        cap.release()
+    return cameras
 
-if __name__ == "__main__":
-    print("Current working dir:", os.getcwd())
 
-    # Use v5_model.pt (model from last year) on the video (default.mp4)
-    main('assets/v5_model.pt', 'video', 'assets/default.mp4')
+if __name__ == '__main__':
+    cameras = get_connected_cameras()
+    print(f"Connected cameras: {cameras}")
+
+#
+# if __name__ == "__main__":
+#
+#
+#     print("Current working dir:", os.getcwd())
+#
+#     # Use v5_model.pt (model from last year) on the video (default.mp4)
+#     main('assets/v5_model.pt', 'video', 'assets/default.mp4')
