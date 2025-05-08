@@ -15,8 +15,8 @@ class Node:
 # RRT* algorithm
 class RRTStar:
     def __init__(self, start, goal, num_obstacles, map_size, step_size=0.3, max_iter=500):
-        self.start = Node(start[0], start[1])
-        self.goal = Node(goal[0], goal[1])
+        self.start = start if isinstance(start, Node) else Node(start[0], start[1])
+        self.goal = goal if isinstance(goal, Node) else Node(goal[0], goal[1])
         self.map_size = map_size
         self.obstacles = self.generate_random_obstacles(num_obstacles)
         self.step_size = step_size

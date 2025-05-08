@@ -171,3 +171,54 @@ class VehicleHandler:
 
         else:
             print("No steering required")
+
+if __name__ == "__main__":
+    vehicle = VehicleHandler(weights_path="assets/v5_model.pt", input_source="assets/Car.mp4")
+
+    while True:
+        ret, frame = vehicle.cam.read()
+        if not ret:
+            break
+
+        detections = vehicle.object_detection.detect(frame)
+
+        # Simulate LIDAR scan
+        scan = []
+        for angle in range(160, 200):  # Simulated narrow FOV
+            scan.append((angle, random.uniform(100, 1000)))  # Distance in mm
+
+        # Merge detections and LIDAR
+        object_distances = vehicle.merge_measurements(detections, scan)
+
+        # Set goal if nearby car is detected
+        goal = vehicle.set_goal(object_distances)
+
+        if goal:
+            # Plan path using RRT*
+            path = vehicle.initialize_rrt(object_distances, goal)
+
+            # Draw path on frame
+            if path:
+                for i in range(len(path) - 1):
+                    x1, y1 = path[i]
+                    x2, y2 = path[i + 1]
+
+                    u1, v1 = vehicle.homogeneous_coordinates(x1, y1)
+                    u2, v2 = vehicle.homogeneous_coordinates(x2, y2)
+
+                    cv2.line(frame, (int(u1), int(v1)), (int(u2), int(v2)), (0, 255, 0), 2)
+
+        # Show detections on frame
+        for det in detections:
+            x1, y1, x2, y2, conf, class_id = det[:6]
+            class_name = vehicle.model.names[int(class_id)]
+            if class_name == "Car":
+                cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 2)
+
+        cv2.imshow("RRT* Navigation", frame)
+        if cv2.waitKey(25) & 0xFF == ord('q'):
+            break
+
+    vehicle.cam.release()
+    cv2.destroyAllWindows()
+
