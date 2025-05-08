@@ -4,28 +4,26 @@ from comparer import Comparitor
 from mapper import Mapper
 import cv2 as cv
 from kalman import KalmanFilter
+import configparser
 
 def wrap_to_pi(angle):
     return (angle + np.pi) % (2 * np.pi) - np.pi
 
 class ParticleFilter:
-    def __init__(self, x, y, theta, x_std, y_std, theta_std, amount) -> None:
-        self.x_std = x_std
-        self.y_std = y_std
-        self.theta_std = theta_std
-        self.std = [x_std, y_std, theta_std]
-        self.amount = amount
+    def __init__(self) -> None:
+        config = configparser.ConfigParser()
+        config.read("config.ini")
+        std_x = float(config["ParticleFilter"]["std_x"])
+        std_y = float(config["ParticleFilter"]["std_y"])
+        std_theta = float(config["ParticleFilter"]["std_theta"])
+        self.std = [std_x, std_y, std_theta]
+        self.amount = int(config["ParticleFilter"]["particles"])
         self.generator = np.random.default_rng()
-        self.particles = np.tile([x, y, theta], (amount, 1))
         map = cv.imread("../var/map.png", cv.IMREAD_GRAYSCALE)
-        self.mapper = Mapper(scale=0.0483398, map=map)
+        self.mapper = Mapper()
         self.comparitor = Comparitor()
         self.groups = 1
-        self.x = x
-        self.y = y
-        self.theta = theta
         self.kalman = KalmanFilter()
-        self.kalman.x = np.array([[x], [y], [0], [theta], [0]])  # state (location and velocity)
 
 
     def update_particles(self, dx, dy, dtheta, std=None) -> None:
@@ -41,6 +39,10 @@ class ParticleFilter:
 
     def spawn_new_particles(self, x, y, theta) -> None:
         self.particles = np.tile([x, y, theta], (self.amount, 1))
+        self.x = x
+        self.y = y
+        self.theta = theta
+        self.kalman.x = np.array([[x], [y], [0], [theta], [0]])  # state (location and velocity)
 
     def evolve_particles(self, particles) -> None:
         groups = []

@@ -1,14 +1,18 @@
 import cv2 as cv
 import numpy as np
 from utils import rotate_img, apply_affine
+import configparser
 
 class Mapper:
-    def __init__(self, scale=1, map=np.zeros((10000, 10000), dtype=np.uint8)) -> None:
+    def __init__(self) -> None:
+        config = configparser.ConfigParser()
+        config.read("config.ini")
+        map = cv.imread(config["Mapper"]["map"], cv.IMREAD_GRAYSCALE)
         self.map = map
         self.offset = np.array([5000,0])
         self.pose_map_list = []
-        self.scale = scale
-        self.distance = 1730 * self.scale
+        self.scale = float(config["Mapper"]["scale"])
+        self.distance = int(config["Localizer"]["distance"]) * self.scale
         self.width = 98
         self.height = 47
     

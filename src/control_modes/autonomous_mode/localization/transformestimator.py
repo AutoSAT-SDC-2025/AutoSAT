@@ -46,27 +46,17 @@ class TransformAngleEstimator:
     def estimate_transformation(self, original_points, transformed_points):
         
         if len(original_points) < self.threshold:
-            # print("not enought points")
             return None, None, None
         
         affinemtx, inliers = cv.estimateAffinePartial2D(original_points, transformed_points)
         inliers = np.reshape(inliers, shape=(len(inliers))).astype(bool)
-
-        # print(affinemtx)
-        # print(self.scale)
-        # affinemtx = self.scaling_matrix@np.vstack([affinemtx, [0,0,1]])
 
         dx = affinemtx[0,2]*self.scale
         dy = affinemtx[1,2]*self.scale
         affinemtx[0,2] = dx
         affinemtx[1,2] = dy
         
-        # delta_points = (transformed_points[inliers] - original_points[inliers])
-        # dy = np.mean(delta_points[:,1])
-        # dx = np.mean(delta_points[:,0]) #+ dy*0.1871
-        
         t = np.array([[dx], [dy]])
-        # t = affinemtx[:, 2:]
         
         R = self.translation_to_rotation(t, self.distance)
 
