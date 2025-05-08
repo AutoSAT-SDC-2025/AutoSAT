@@ -1,5 +1,6 @@
 from abc import ABC
 
+from src.control_modes.autonomous_mode.old_twente_code.video import get_camera_config
 from .line_detection.LineDetection import LineFollowingNavigation
 from .object_detection.ObjectDetection import ObjectDetection
 from .avoidance.Avoidance import Avoidance
@@ -25,6 +26,8 @@ def get_connected_cameras(max_devices=5):
         if cap.read()[0]:
             cameras.append(idx)
         cap.release()
+
+    get_camera_config('assets/configs/camera_config/2025kart.json')
     return cameras
 
 
@@ -49,6 +52,8 @@ class AutonomousMode(IControlMode, ABC):
         self.nav = LineFollowingNavigation(width=WIDTH, height=HEIGHT)
         self.object_detector = ObjectDetection(weights_path='assets/v5_model.pt', input_source='video')
         self.traffic_manager = TrafficManager()
+
+
 
         self.renderer = Renderer()
 

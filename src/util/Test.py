@@ -1,6 +1,8 @@
 import os
 
 import cv2
+
+from src.util.video import get_camera_config
 from ..control_modes.autonomous_mode.object_detection.ObjectDetection import ObjectDetection
 from ..control_modes.autonomous_mode.object_detection.TrafficDetection import TrafficManager
 
@@ -45,19 +47,12 @@ def main(weights_path: str, input_source: str, video_path: str = None):
     cv2.destroyAllWindows()
 
 def get_connected_cameras(max_devices=5):
-    # Laptop: 0, 1, 2
-    cameras = []
-    for idx in range(max_devices):
-        cap = cv2.VideoCapture(idx)
-        if cap.read()[0]:
-            cameras.append(idx)
-        cap.release()
-    return cameras
+    conf = get_camera_config()
+    print(conf)
 
 
 if __name__ == '__main__':
-    cameras = get_connected_cameras()
-    print(f"Connected cameras: {cameras}")
+    get_connected_cameras()
 
 #
 # if __name__ == "__main__":
