@@ -17,25 +17,6 @@ from ...util.Render import Renderer
 import cv2
 import logging
 
-DO_STITCH = False
-
-
-def get_connected_cameras(max_devices=5):
-    cameras = []
-    for idx in range(max_devices):
-        cap = cv2.VideoCapture(idx)
-        if cap.read()[0]:
-            cameras.append(idx)
-        cap.release()
-
-    get_camera_config('assets/configs/camera_config/2025kart.json')
-    return cameras
-
-
-if __name__ == '__main__':
-    cameras = get_connected_cameras()
-    print(f"Connected cameras: {cameras}")
-
 WIDTH = 848
 HEIGHT = 480
 
@@ -43,9 +24,6 @@ LineDetectionDims = {
     'width': 720,
     'height': 720
 }
-
-
-
 
 class AutonomousMode(IControlMode, ABC):
     data = CalibrationData(
