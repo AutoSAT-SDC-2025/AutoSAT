@@ -1,8 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from comparer import Comparitor, KDTreeComparitor
+from comparer import Comparitor
 from mapper import Mapper
 import cv2 as cv
+from kalman import KalmanFilter
 
 def wrap_to_pi(angle):
     return (angle + np.pi) % (2 * np.pi) - np.pi
@@ -23,6 +24,8 @@ class ParticleFilter:
         self.x = x
         self.y = y
         self.theta = theta
+        self.kalman = KalmanFilter()
+        self.kalman.x = np.array([[x], [y], [0], [theta], [0]])  # state (location and velocity)
 
 
     def update_particles(self, dx, dy, dtheta, std=None) -> None:
@@ -52,15 +55,24 @@ class ParticleFilter:
             self.particles = np.vstack([self.particles, groups[i]])
 
     def update(self, lane, dx, dy, dtheta) -> None:
-        if self.comparitor.trust_score(lane) < 0.4:
-            print(self.comparitor.trust_score(lane))
-            self.update_particles(dx, dy, dtheta, std=np.zeros(3))
-            return
+        trust_score = self.comparitor.trust_score(lane)
+        v = np.sqrt(dx**2+dy**2)
+        print("SPEED", v)
         self.update_particles(dx, dy, dtheta)
         particle, idx, score = self.find_location(lane)
-        self.x = particle[0]
-        self.y = particle[1]
-        self.theta = particle[2]
+        x = particle[0]
+        y = particle[1]
+        theta = particle[2]
+        print("score", score)
+        print("trust", trust_score)
+        score = min(1, np.exp(-2*(score*trust_score-6)))
+        self.kalman.predict(np.array([[v],[dtheta]]), np.array([[x],[y],[theta]]), score)
+        self.x = self.kalman.x[0][0]
+        self.y = self.kalman.x[1][0]
+        self.theta = self.kalman.x[3][0]
+        self.particles[idx[0]][0] = self.x
+        self.particles[idx[0]][1] = self.y
+        self.particles[idx[0]][2] = self.theta
         self.evolve_particles(self.particles[idx])
 
     def find_location(self, lane):

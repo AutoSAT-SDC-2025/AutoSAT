@@ -4,9 +4,12 @@ from keypointmatcher import StarKeyPointMatcher
 from transformestimator import TransformAngleEstimator
 from particlefilter import ParticleFilter
 from mapper import Mapper
+import configparser
 
 class Localizer:
     def __init__(self, perspective_matrix, init_img: np.ndarray, transform_estimator=None, distance=1730, **kwargs):
+        self.config = configparser.ConfigParser()
+        self.config.read("config.ini")
         self.perspective_matrix = perspective_matrix
         self.width = 847
         self.height = 285
@@ -25,6 +28,7 @@ class Localizer:
         
         self.mapper = Mapper(scale=0.0483398, map=map)
         self.particle_filter = ParticleFilter(5640*(1/self.mapper.scale),350*(1/self.mapper.scale),np.pi/2,10,50,0.05, 100)
+        # self.particle_filter = ParticleFilter(5640*(1/self.mapper.scale),350*(1/self.mapper.scale),np.pi/2,10,20,0.05, 100)
 
         if transform_estimator is None:
             self.transform_estimator = TransformAngleEstimator(pixel_threshold=30, distance=self.distance, scale=self.scale)
@@ -80,8 +84,8 @@ class Localizer:
         self._theta = (np.arctan2(self.rotation[1, 0], self.rotation[0, 0]))
 
         self.translation = translation
-        # translation[0][0] = -translation[0][0] # positive x means to the left
-        translation[0][0] = 0 # positive x means to the left
+        translation[0][0] = -translation[0][0] # positive x means to the left
+        # translation[0][0] = 0 # positive x means to the left
 
         translation = self.rotation @ translation
         

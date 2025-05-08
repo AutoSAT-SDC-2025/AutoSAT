@@ -5,14 +5,14 @@ class KalmanFilter:
     def __init__(self):
         self.dt = 1
         # x, y, v, theta, omega
-        self.x = np.array([[0], [0], [30], [0], [0]])  # state (location and velocity)
+        self.x = np.array([[0], [0], [0], [0], [0]])  # state (location and velocity)
         self.A = np.array(
             [
                 [
                     1,
                     0,
-                    self.dt * np.sin(self.x[3, 0]),
-                    self.x[2, 0] * self.dt * np.cos(self.x[3, 0]),
+                    -self.dt * np.sin(self.x[3, 0]),
+                    -self.x[2, 0] * self.dt * np.cos(self.x[3, 0]),
                     0,
                 ],
                 [
@@ -36,30 +36,30 @@ class KalmanFilter:
 
         # Measurement noise covariance (R)
         self.R_A = np.diag(
-            [5**2, 5**2]
+            [5**2, 0.1**2]
         )  # GPS error 5m, IMU error 0.1 rad, speed error 2 m/s
         self.R_B = np.diag(
-            [5**2, 5**2, 5**2]
+            [1**2, 1**2, 0.01**2]
         )
 
         # Error covariance matrix (P)
         self.P = np.eye(5) * 1e3  # Large initial uncertainty
 
-    def predict(self, z_a, z_b):
+    def predict(self, z_a, z_b, score):
         self.A = np.array(
             [
                 [
                     1,
                     0,
-                    self.dt * np.sin(self.x[3, 0]),
-                    self.x[2, 0] * self.dt * np.cos(self.x[3, 0]),
+                    -self.dt * np.sin(self.x[3, 0]),
+                    0,
                     0,
                 ],
                 [
                     0,
                     1,
                     self.dt * np.cos(self.x[3, 0]),
-                    -self.x[2, 0] * self.dt * np.sin(self.x[3, 0]),
+                    0,
                     0,
                 ],
 
@@ -77,8 +77,10 @@ class KalmanFilter:
         x_p = x_p + K @ (z_a - self.H_A @ x_p)
         self.P = (np.eye(5) - K @ self.H_A) @ p_p
 
-        # Sensor B
-        K = p_p @ self.H_B.T @ np.linalg.inv(self.H_B @ p_p @ self.H_B.T + self.R_B)
+        # Sensor H_B
+
+        R_B = self.R_B*min(1/score, 10)
+        K = p_p @ self.H_B.T @ np.linalg.inv(self.H_B @ p_p @ self.H_B.T + R_B)
         self.x = x_p + K @ (z_b - self.H_B @ x_p)
         self.P = (np.eye(5) - K @ self.H_B) @ p_p
 
@@ -86,6 +88,8 @@ class KalmanFilter:
 
 if __name__ == "__main__":
     kalman = KalmanFilter()
-    for i in range(100):
+    kalman.x = np.array([[0], [0], [50], [np.pi/2], [0]])  # state (location and velocity)
+
+    for i in range(10):
         print(kalman.x)
-        kalman.predict(np.array([[50], [0]]), np.array([[0],[0],[0]]))
+        kalman.predict(np.array([[50], [0]]), np.array([[0],[0],[0]]), 1)

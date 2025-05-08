@@ -1,19 +1,12 @@
 from localization import Localizer
-
-import localization
 from mapper import Mapper
 from lane_detection import LaneDetector
-from ptransform import get_perspective_matrix
 import numpy as np
 import cv2 as cv
-from transformestimator import TransformEstimator
-from matplotlib import pyplot as plt
 import time
 
 start_frame = 1119
 start_frame = 1552
-# start_frame = 3500
-# start_frame = 5000
 map_scale = 0.0483398
 
 x, y = (5640*(1/map_scale),350*(1/map_scale))
@@ -22,9 +15,7 @@ theta = np.pi/2
 mapping = False
 
 matrix = np.load("../var/B.npy")
-pmatrix = np.load("../var/B.npy")
 K = np.load("../var/camera/middle.npy")
-# cap = cv.VideoCapture("data/recording 29-03-2024 08-56-36.mp4")
 cap = cv.VideoCapture("/home/thimo/Seafile/Git/SDC/data/recording 29-03-2024 08-56-36.mp4")
 
 ret, prev_frame = cap.read()
@@ -32,7 +23,7 @@ ret, prev_frame = cap.read()
 A = np.identity(3)
 A[0,2] = 500
 A[1,2] = 900
-B = A@pmatrix
+B = A@matrix
 lanedetector = LaneDetector(B)
 if mapping is True:
     mapper = Mapper(scale=map_scale)
