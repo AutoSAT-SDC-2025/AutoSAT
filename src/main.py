@@ -23,7 +23,7 @@ def main():
         auto = AutonomousMode(CarType(car))
         auto.start()
     elif mode == "3":
-        calibrate_connected_cameras(save_path="./calibration", max_devices=5)
+        calibrate_connected_cameras(save_path="../assets/calibration")
     # go.main()
 
 if __name__ == "__main__":
