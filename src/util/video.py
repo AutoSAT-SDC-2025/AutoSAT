@@ -17,3 +17,18 @@ def get_camera_config(config_folder: str = "assets/configs") -> Optional[CamConf
             if any((os.path.exists(camera) and not os.path.isdir(camera) for camera in config.values())):
                 return config
     return None
+
+def validate_camera_config(config: CamConfig) -> bool:
+    """
+    Validate the camera configuration.
+    """
+    if not config:
+        return False
+
+    for camera in config.values():
+        if not os.path.exists(camera):
+            return False
+
+    if len(config) != 3:
+        return False
+    return True
