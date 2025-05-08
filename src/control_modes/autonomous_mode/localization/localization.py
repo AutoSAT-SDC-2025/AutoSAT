@@ -80,8 +80,8 @@ class Localizer:
         self._theta = (np.arctan2(self.rotation[1, 0], self.rotation[0, 0]))
 
         self.translation = translation
-        translation[0][0] = -translation[0][0] # positive x means to the left
-        # translation[0][0] = 0 # positive x means to the left
+        # translation[0][0] = -translation[0][0] # positive x means to the left
+        translation[0][0] = 0 # positive x means to the left
 
         translation = self.rotation @ translation
         
@@ -89,7 +89,7 @@ class Localizer:
         self._y += translation[1][0]
         self.x = self._x + self.distance * np.sin(self._theta)
         self.y = self._y - self.distance * np.cos(self._theta)
-        # print(translation)
+
         # self.x += translation[0][0]
         # self.y += translation[1][0]
         # self._x = self.x - self.distance * np.sin(self._theta)

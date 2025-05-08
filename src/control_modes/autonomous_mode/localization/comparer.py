@@ -77,6 +77,11 @@ class Comparitor:
     def get_distance_features(self, features1, features2):
         return np.linalg.norm(features1 - features2)
 
+    def trust_score(self, img):
+        """Return a score between 0 and 1"""
+        print(np.sum(img))
+        return min(np.sum(img)/113636, 1)
+
     
 class KDTreeComparitor:
     def __init__(self):

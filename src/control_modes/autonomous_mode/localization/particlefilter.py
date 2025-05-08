@@ -25,11 +25,12 @@ class ParticleFilter:
         self.theta = theta
 
 
-    def update_particles(self, dx, dy, dtheta) -> None:
-        std = np.zeros(3)
-        std[0] = np.abs(self.std[1]*np.sin(self.theta)) + np.abs(self.std[0]*np.cos(self.theta)) # x
-        std[1] = np.abs(self.std[0]*np.sin(self.theta)) + np.abs(self.std[1]*np.cos(self.theta)) # y
-        std[2] = self.std[2]
+    def update_particles(self, dx, dy, dtheta, std=None) -> None:
+        if std is None:
+            std = np.zeros(3)
+            std[0] = np.abs(self.std[1]*np.sin(self.theta)) + np.abs(self.std[0]*np.cos(self.theta)) # x
+            std[1] = np.abs(self.std[0]*np.sin(self.theta)) + np.abs(self.std[1]*np.cos(self.theta)) # y
+            std[2] = self.std[2]
         noise = self.generator.normal(0, std, (self.amount, 3))
         difference = np.tile([dx, dy, dtheta], (self.amount, 1))
         self.particles = self.particles + noise + difference
@@ -51,12 +52,12 @@ class ParticleFilter:
             self.particles = np.vstack([self.particles, groups[i]])
 
     def update(self, lane, dx, dy, dtheta) -> None:
+        if self.comparitor.trust_score(lane) < 0.4:
+            print(self.comparitor.trust_score(lane))
+            self.update_particles(dx, dy, dtheta, std=np.zeros(3))
+            return
         self.update_particles(dx, dy, dtheta)
         particle, idx, score = self.find_location(lane)
-        print(score)
-        #if score > 11:
-        #    # exit()
-        #    return
         self.x = particle[0]
         self.y = particle[1]
         self.theta = particle[2]
@@ -71,10 +72,8 @@ class ParticleFilter:
             angle = particle[2]
             map_lane = self.mapper.get_sight(pos, angle)
             map_features = self.comparitor.get_hog_features(map_lane)
-            # scores[i] = self.comparitor(map_lane, lane)
             scores[i] = self.comparitor.get_distance_features(features_lane, map_features)
         idx = np.argsort(scores)
-        # print(scores)
         return self.particles[idx[0]], idx[:self.groups], scores[idx[0]]
 
     def plot(self):
