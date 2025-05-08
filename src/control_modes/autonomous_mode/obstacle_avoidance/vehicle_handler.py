@@ -171,5 +171,3 @@ class VehicleHandler:
 
         else:
             print("No steering required")
-
-    def test_main(self):

@@ -26,9 +26,3 @@ class OvertakeHandler(ObjectDetection):
                         print("Car detected")
                         return True
             return False
-
-    def set_steering(self):
-        calculates_steering = calculate_steering(
-
-    def start_overtake(self):
-        if self.initialize_overtake:
