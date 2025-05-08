@@ -26,17 +26,19 @@ LineDetectionDims = {
 }
 
 class AutonomousMode(IControlMode, ABC):
-    data = CalibrationData(
-        path="./calibration/latest.npz",
-        input_shape=(1920, 1080),
-        output_shape=(LineDetectionDims['width'], LineDetectionDims['height']),
-        render_distance=RenderDistance(
-            front=12.0,
-            sides=6.0
-        )
-    )
 
     def __init__(self, car_type: CarType, use_checkpoint_mode=False):
+
+        self.data = CalibrationData(
+            path="./calibration/latest.npz",
+            input_shape=(1920, 1080),
+            output_shape=(LineDetectionDims['width'], LineDetectionDims['height']),
+            render_distance=RenderDistance(
+                front=12.0,
+                sides=6.0
+            )
+        )
+
         self.captures = None
         self.car_type = car_type
         self.can_bus = connect_to_can_interface(0)
@@ -80,7 +82,7 @@ class AutonomousMode(IControlMode, ABC):
             frames[cam_name] = frame
 
         try:
-            top_down = data.transform([frames['left'], frames['front'], frames['right']])
+            top_down = self.data.transform([frames['left'], frames['front'], frames['right']])
         except Exception as e:
             raise RuntimeError(f"Stitching error: {e}")
 
