@@ -1,42 +1,65 @@
 import cv2
 from src.multi_camera_calibration import CalibrationPattern, Calibrator
 from src.util.video import get_camera_config
+import os
+
+# Toggle this to switch between using cameras or loading static images
+use_cameras = False
 
 
 def calibrate_connected_cameras(save_path="./calibration"):
-    cams = get_camera_config()
-
-    if not cams or not cams.get('left') or not cams.get('right') or not cams.get('front'):
-        raise RuntimeError("No cameras connected or invalid camera configuration")
-
     captured_images = []
 
-    for cam_name in ['left', 'front', 'right']:
-        cam_path = cams[cam_name]
-        cap = cv2.VideoCapture(cam_path)
+    if use_cameras:
+        cams = get_camera_config()
 
-        if not cap.isOpened():
-            raise RuntimeError(f"Failed to open {cam_name} camera at {cam_path}")
+        if not cams or not cams.get('left') or not cams.get('right') or not cams.get('front'):
+            raise RuntimeError("No cameras connected or invalid camera configuration")
 
-        for _ in range(3):
-            cap.read()
+        for cam_name in ['left', 'front', 'right']:
+            cam_path = cams[cam_name]
+            cap = cv2.VideoCapture(cam_path)
 
-        ret, frame = cap.read()
-        cap.release()
+            if not cap.isOpened():
+                raise RuntimeError(f"Failed to open {cam_name} camera at {cam_path}")
 
-        if not ret:
-            raise RuntimeError(f"Failed to read frame from {cam_name} camera at {cam_path}")
+            for _ in range(3):
+                cap.read()
 
-        captured_images.append(frame)
+            ret, frame = cap.read()
+            cap.release()
 
-    pattern = CalibrationPattern(
-        width=10,
-        height=8,
-        square_length=0.115,
-        marker_length=0.086,
-        aruco_dict=cv2.aruco.DICT_4X4_100
-    )
+            if not ret:
+                raise RuntimeError(f"Failed to read frame from {cam_name} camera at {cam_path}")
+
+            captured_images.append(frame)
+
+    else:
+        # Load from assets/temp folder
+        for cam_name in ['left', 'center', 'right']:
+            img_path = os.path.join("assets", "temp", f"{cam_name}.jpg")
+            frame = cv2.imread(img_path)
+            # resize to 1920x1080
+            frame = cv2.resize(frame, (1920, 1080))
+
+            # also save the resized to resized_{cam_name}.jpg
+            resized_path = os.path.join("assets", "temp", f"resized_{cam_name}.jpg")
+            cv2.imwrite(resized_path, frame)
+
+            cv2.imshow("Calibration Image", frame)
+
+            cv2.waitKey(0)
+
+            if frame is None:
+                raise RuntimeError(f"Failed to load image from {img_path}")
+
+            captured_images.append(frame)
+    # pattern = CalibrationPattern(10, 8, 0.115, 0.086, cv2.aruco.DICT_4X4_100)
+
+    pattern = CalibrationPattern(7, 5, 0.057, 0.043, cv2.aruco.DICT_4X4_100)
+
 
     calibrator = Calibrator(captured_images, pattern)
     calibrator.calibrate()
-    calibrator.save(save_path, keep_history=False)
+    calibrator.save(save_path, keep_history=False, overwrite=True)
+    print(f"Calibration data saved to {save_path}")
