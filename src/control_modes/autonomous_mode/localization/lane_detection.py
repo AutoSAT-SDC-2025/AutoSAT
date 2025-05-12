@@ -1,10 +1,14 @@
 from typing import Any
 import cv2 as cv
 import numpy as np
+import configparser
 
 class LaneDetector():
-    def __init__(self, perspective_matrix) -> None:
-        self.pmatrix = perspective_matrix
+    def __init__(self) -> None:
+        config = configparser.ConfigParser()
+        config.read("config.ini")
+        self.pmatrix = np.load(config["LaneDetection"]["transformation"])
+
     
     def __call__(self, img: np.array) -> Any:
         width, height = (img.shape[1]+1200, img.shape[0]+500)

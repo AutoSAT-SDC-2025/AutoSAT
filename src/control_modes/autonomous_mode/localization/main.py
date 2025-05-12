@@ -24,7 +24,8 @@ A = np.identity(3)
 A[0,2] = 500
 A[1,2] = 900
 B = A@matrix
-lanedetector = LaneDetector(B)
+np.save("lane_detection_B.npy", B)
+lanedetector = LaneDetector()
 if mapping is True:
     mapper = Mapper(scale=map_scale)
 
@@ -37,7 +38,7 @@ if not ret:
     exit()
 ret, frame = cap.read()
 frame = cv.undistort(frame, K, None)
-localizer = Localizer(frame)
+localizer = Localizer()
 localizer.set_start_location(x, y, theta)
 gframe = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
 mask = cv.warpPerspective(np.ones_like(gframe), B, dsize=(frame.shape[1]+1200, frame.shape[0]+500))

@@ -8,7 +8,7 @@ from mapper import Mapper
 import configparser
 
 class Localizer:
-    def __init__(self, init_img: np.ndarray, **kwargs):
+    def __init__(self, **kwargs):
         config = configparser.ConfigParser()
         config.read("config.ini")
         self.perspective_matrix = np.load(config["Localizer"]["transformation"])
