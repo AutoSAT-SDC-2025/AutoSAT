@@ -12,6 +12,7 @@ from typing import Dict
 import platform
 from pathlib import Path
 import threading
+import multiprocessing as mp
 
 import numpy as np
 
@@ -31,12 +32,27 @@ from can_worker import CanWorker, initialize_can
 from camera_utils import initialize_cameras, getHorizon
 from line_detection import getLines, newLines, splitLines, findTarget
 from object_detection import initialize, traffic_object_detection, adjust_throttle
+from localization.localization import Localizer
+from localization.lane_detection import LaneDetector
 
 
 from src.can_interface.can_factory import select_can_controller_creator, create_can_controller
 from src.can_interface.bus_connection import connect_to_can_interface, disconnect_from_can_interface
 from src.car_variables import CarType, KartGearBox, HunterControlMode, HunterFeedbackCanIDs, KartFeedbackCanIDs
 
+def localization(shared):
+    localizer = Localizer()
+    lane_detector = LaneDetector()
+    img = None
+    while True:
+        if img == shared.img:
+            pass
+        img = shared.img
+        lane = lane_detector(img)
+        localizer.update(img, lane)
+        shared.x = localizer.x
+        shared.y = localizer.y
+        shared.theta = localizer.theta
 
 def main():
     """
@@ -107,10 +123,19 @@ def main():
     throttle_adjustment_thread = threading.Thread(
         target=adjust_throttle, args=(state_queue, throttle_queue, MAX_CAR_SPEED)
     )
-
     frame_processing_thread.start()
     throttle_adjustment_thread.start()
     print("Object detection threads started...")
+
+    img_queue = mp.Queue()
+    localization_manager = mp.Manager()
+    localization_namespace = localization_manager.Namespace()
+    localization_namespace.x = 0 
+    localization_namespace.y = 0 
+    localization_namespace.theta = 0 
+    localization_namespace.img = None
+    localization_process = mp.Process(target=localization, args=(localization_namespace,))
+    localization_process.start()
 
     try:
         # # Define CAN messages
@@ -171,6 +196,9 @@ def main():
 
                 # Get camera data
                 _, frame = front_camera.read()
+                # TODO: Camera Calibration!
+                # frame = cv.undistort(frame, K, None)
+                img_queue.put(frame)
                 # add frame to frame queue (in cv2 format)
                 frame_queue.append(frame)
 
@@ -294,6 +322,7 @@ def main():
 
         frame_processing_thread.join()
         throttle_adjustment_thread.join()
+        localization_process.join()
 
         can_listener.stop_listening()
 
