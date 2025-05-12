@@ -37,24 +37,17 @@ def calibrate_connected_cameras(save_path="./calibration"):
     else:
         # Load from assets/temp folder
         for cam_name in ['left', 'center', 'right']:
-            img_path = os.path.join("assets", "temp", f"{cam_name}.jpg")
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))  # Go from src/util/ -> AutoSAT
+            img_path = os.path.join(project_root, "assets", "temp", f"{cam_name}.png")
+
             frame = cv2.imread(img_path)
-            # resize to 1920x1080
             frame = cv2.resize(frame, (1920, 1080))
-
-            # also save the resized to resized_{cam_name}.jpg
-            resized_path = os.path.join("assets", "temp", f"resized_{cam_name}.jpg")
-            cv2.imwrite(resized_path, frame)
-
-            cv2.imshow("Calibration Image", frame)
-
-            cv2.waitKey(0)
 
             if frame is None:
                 raise RuntimeError(f"Failed to load image from {img_path}")
 
             captured_images.append(frame)
-    # pattern = CalibrationPattern(10, 8, 0.115, 0.086, cv2.aruco.DICT_4X4_100)
 
     pattern = CalibrationPattern(7, 5, 0.057, 0.043, cv2.aruco.DICT_4X4_100)
 
