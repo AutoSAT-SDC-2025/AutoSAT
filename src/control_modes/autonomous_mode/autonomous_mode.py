@@ -13,7 +13,7 @@ from ...can_interface.can_factory import select_can_controller_creator, create_c
 from ...util.Render import Renderer
 # from navigation.modes.Checkpoint import Checkpoint
 # from stitching import Stitcher
-from localization import localization
+from .localization import localization
 import multiprocessing as mp
 
 import cv2
