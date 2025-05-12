@@ -5,6 +5,8 @@ from keypointmatcher import StarKeyPointMatcher
 from transformestimator import TransformAngleEstimator
 from particlefilter import ParticleFilter
 from mapper import Mapper
+import multiprocessing as mp 
+from lane_detection import LaneDetector
 import configparser
 
 class Localizer:
@@ -121,3 +123,28 @@ class Localizer:
         img = cv.GaussianBlur(img,(5,5),0)
         img = cv.resize(img, None, fx=self.scale, fy=self.scale, interpolation= cv.INTER_LINEAR)
         return img
+
+def localization_worker(shared):
+    localizer = Localizer()
+    lane_detector = LaneDetector()
+    img = None
+    while True:
+        if img == shared.img:
+            pass
+        img = shared.img
+        lane = lane_detector(img)
+        localizer.update(img, lane)
+        shared.x = localizer.x
+        shared.y = localizer.y
+        shared.theta = localizer.theta
+
+
+if __name__ == "__main__":
+    mg = mp.Manager()
+    shared = mg.Namespace()
+    shared.img = None
+    shared.x = None
+    shared.y = None
+    shared.theta = None
+    mp.Process(target=localization_worker, args=(shared,))
+    print(shared.x)

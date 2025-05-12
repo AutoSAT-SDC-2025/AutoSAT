@@ -13,6 +13,8 @@ from ...can_interface.can_factory import select_can_controller_creator, create_c
 from ...util.Render import Renderer
 # from navigation.modes.Checkpoint import Checkpoint
 # from stitching import Stitcher
+from localization import localization
+import multiprocessing as mp
 
 import cv2
 import logging
@@ -55,6 +57,15 @@ class AutonomousMode(IControlMode, ABC):
 
         self.renderer = Renderer()
 
+        localization_manager = mp.Manager()
+        self.location = localization_manager.Namespace()
+        self.location.x = 0 
+        self.location.y = 0 
+        self.location.theta = 0 
+        self.location.img = None
+        localization_process = mp.Process(target=localization.localization_worker, args=(self.location,))
+        localization_process.start()
+
     def setup_cameras(self):
         self.captures = {}
         for cam_name in ['left', 'front', 'right']:
@@ -87,6 +98,7 @@ class AutonomousMode(IControlMode, ABC):
             raise RuntimeError(f"Stitching error: {e}")
 
         front_frame = frames['front']
+        self.location.img = front_frame
         front_frame = cv2.resize(front_frame, (WIDTH, HEIGHT))
 
         return top_down, front_frame
@@ -156,6 +168,7 @@ class AutonomousMode(IControlMode, ABC):
                     self.can_controller.set_parking_mode(1)
                 else:
                     logging.info(f"Speed: {speed}, Steering: {steering_angle}")
+                    logging.info(f"X: {self.location.x} Y: {self.location.y} THETA: {self.location.theta}")
                     self.can_controller.set_steering_and_throttle(-(steering_angle * 10), 320)
                     self.can_controller.set_parking_mode(0)
 
