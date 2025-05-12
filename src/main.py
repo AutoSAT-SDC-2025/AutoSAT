@@ -1,4 +1,8 @@
 import logging
+
+from src.car_variables import CarType
+from src.control_modes.autonomous_mode.autonomous_mode import AutonomousMode
+from src.control_modes.manual_mode.manual_mode import ManualMode
 # from src.car_variables import CarType
 # from src.control_modes.manual_mode.manual_mode import ManualMode
 # from src.control_modes.autonomous_mode.autonomous_mode import AutonomousMode
@@ -17,15 +21,15 @@ def main():
         return
 
     if mode == "1":
-        # manual = ManualMode(CarType(car))
-        # manual.start()
-        pass
+        manual = ManualMode(CarType(car))
+        manual.start()
+
     elif mode == "2":
-        # auto = AutonomousMode(CarType(car))
-        # auto.start()
-        pass
+        auto = AutonomousMode(CarType(car))
+        auto.start()
+
     elif mode == "3":
-        calibrate_connected_cameras(save_path="../assets/calibration")
+        calibrate_connected_cameras(save_path="assets/calibration")
     # go.main()
 
 if __name__ == "__main__":
