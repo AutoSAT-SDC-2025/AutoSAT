@@ -4,7 +4,7 @@ from src.util.video import get_camera_config
 import os
 
 # Toggle this to switch between using cameras or loading static images
-use_cameras = False
+use_cameras = True
 
 
 def calibrate_connected_cameras(save_path="./calibration"):
