@@ -63,8 +63,8 @@ class AutonomousMode(IControlMode, ABC):
         self.location.y = 0 
         self.location.theta = 0 
         self.location.img = None
-        localization_process = mp.Process(target=localization.localization_worker, args=(self.location,))
-        localization_process.start()
+        self.localization_process = mp.Process(target=localization.localization_worker, args=(self.location,))
+        self.localization_process.start()
 
     def setup_cameras(self):
         self.captures = {}
@@ -184,6 +184,8 @@ class AutonomousMode(IControlMode, ABC):
 
     def stop(self) -> None:
         logging.info("Stopping autonomous mode.")
+        self.localization_process.terminate()
+        self.localization_process.join()
         for cap in getattr(self, 'captures', {}).values():
             cap.release()
         if self.car_type == CarType.hunter:
