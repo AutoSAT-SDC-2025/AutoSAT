@@ -1,18 +1,21 @@
 from os import wait
 import cv2 as cv
 import numpy as np
-from keypointmatcher import StarKeyPointMatcher
-from transformestimator import TransformAngleEstimator
-from particlefilter import ParticleFilter
-from mapper import Mapper
+from .keypointmatcher import StarKeyPointMatcher
+from .transformestimator import TransformAngleEstimator
+from .particlefilter import ParticleFilter
+from .mapper import Mapper
 import multiprocessing as mp 
-from lane_detection import LaneDetector
+from .lane_detection import LaneDetector
 import configparser
+from pathlib import Path
 
 class Localizer:
     def __init__(self, **kwargs):
+        current_file = Path(__file__).resolve()
+        project_root = current_file.parents[3]  # adjust this number as needed
         config = configparser.ConfigParser()
-        config.read("config.ini")
+        config.read(project_root/"config"/"config.ini")
         self.perspective_matrix = np.load(config["Localizer"]["transformation"])
         self.width = int(config["Localizer"]["width"])
         self.height = int(config["Localizer"]["height"])
@@ -129,22 +132,29 @@ def localization_worker(shared):
     lane_detector = LaneDetector()
     img = None
     while True:
-        if img == shared.img:
-            pass
-        img = shared.img
-        lane = lane_detector(img)
-        localizer.update(img, lane)
-        shared.x = localizer.x
-        shared.y = localizer.y
-        shared.theta = localizer.theta
+        if shared.img != img:
+            img = shared.img
+            lane = lane_detector(img)
+            localizer.update(img, lane)
+            shared.x = localizer.x
+            shared.y = localizer.y
+            shared.theta = localizer.theta
 
 
 if __name__ == "__main__":
+    from pathlib import Path
+
+    # Assuming this script is somewhere inside the project
+    current_file = Path(__file__).resolve()
+    project_root = current_file.parents[3]  # adjust this number as needed
+    print(project_root)
+    import time
     mg = mp.Manager()
     shared = mg.Namespace()
     shared.img = None
     shared.x = None
     shared.y = None
     shared.theta = None
-    mp.Process(target=localization_worker, args=(shared,))
-    print(shared.x)
+    localization_process = mp.Process(target=localization_worker, args=(shared,))
+    localization_process.start()
+    time.sleep(1)

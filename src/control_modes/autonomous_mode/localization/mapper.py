@@ -1,12 +1,15 @@
 import cv2 as cv
 import numpy as np
-from utils import rotate_img, apply_affine
+from .utils import rotate_img, apply_affine
 import configparser
+from pathlib import Path
 
 class Mapper:
     def __init__(self) -> None:
+        current_file = Path(__file__).resolve()
+        project_root = current_file.parents[3]  # adjust this number as needed
         config = configparser.ConfigParser()
-        config.read("config.ini")
+        config.read(project_root/"config"/"config.ini")
         map = cv.imread(config["Mapper"]["map"], cv.IMREAD_GRAYSCALE)
         self.map = map
         self.offset = np.array([5000,0])

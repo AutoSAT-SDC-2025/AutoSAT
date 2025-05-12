@@ -1,12 +1,16 @@
+from os import wait
 from typing import Any
 import cv2 as cv
 import numpy as np
 import configparser
+from pathlib import Path
 
 class LaneDetector():
     def __init__(self) -> None:
+        current_file = Path(__file__).resolve()
+        project_root = current_file.parents[3]  # adjust this number as needed
         config = configparser.ConfigParser()
-        config.read("config.ini")
+        config.read(project_root/"config"/"config.ini")
         self.pmatrix = np.load(config["LaneDetection"]["transformation"])
 
     

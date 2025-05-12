@@ -1,25 +1,26 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from comparer import Comparitor
-from mapper import Mapper
+from .comparer import Comparitor
+from .mapper import Mapper
 import cv2 as cv
-from kalman import KalmanFilter
+from .kalman import KalmanFilter
 import configparser
-
+from pathlib import Path
 def wrap_to_pi(angle):
     return (angle + np.pi) % (2 * np.pi) - np.pi
 
 class ParticleFilter:
     def __init__(self) -> None:
+        current_file = Path(__file__).resolve()
+        project_root = current_file.parents[3]  # adjust this number as needed
         config = configparser.ConfigParser()
-        config.read("config.ini")
+        config.read(project_root/"config"/"config.ini")
         std_x = float(config["ParticleFilter"]["std_x"])
         std_y = float(config["ParticleFilter"]["std_y"])
         std_theta = float(config["ParticleFilter"]["std_theta"])
         self.std = [std_x, std_y, std_theta]
         self.amount = int(config["ParticleFilter"]["particles"])
         self.generator = np.random.default_rng()
-        map = cv.imread("../var/map.png", cv.IMREAD_GRAYSCALE)
         self.mapper = Mapper()
         self.comparitor = Comparitor()
         self.groups = 1

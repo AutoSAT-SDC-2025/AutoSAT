@@ -1,6 +1,6 @@
-from localization import Localizer
-from mapper import Mapper
-from lane_detection import LaneDetector
+from .localization import Localizer
+from .mapper import Mapper
+from .lane_detection import LaneDetector
 import numpy as np
 import cv2 as cv
 import time
@@ -14,17 +14,17 @@ theta = np.pi/2
 
 mapping = False
 
-matrix = np.load("../var/B.npy")
-K = np.load("../var/camera/middle.npy")
+# matrix = np.load("../var/B.npy")
+K = np.load("var/camera/middle.npy")
 cap = cv.VideoCapture("/home/thimo/Seafile/Git/SDC/data/recording 29-03-2024 08-56-36.mp4")
 
 ret, prev_frame = cap.read()
 
-A = np.identity(3)
-A[0,2] = 500
-A[1,2] = 900
-B = A@matrix
-np.save("lane_detection_B.npy", B)
+# A = np.identity(3)
+# A[0,2] = 500
+# A[1,2] = 900
+# B = A@matrix
+# np.save("lane_detection_B.npy", B)
 lanedetector = LaneDetector()
 if mapping is True:
     mapper = Mapper(scale=map_scale)
@@ -41,7 +41,7 @@ frame = cv.undistort(frame, K, None)
 localizer = Localizer()
 localizer.set_start_location(x, y, theta)
 gframe = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
-mask = cv.warpPerspective(np.ones_like(gframe), B, dsize=(frame.shape[1]+1200, frame.shape[0]+500))
+# mask = cv.warpPerspective(np.ones_like(gframe), B, dsize=(frame.shape[1]+1200, frame.shape[0]+500))
 
 
 while cap.isOpened():
