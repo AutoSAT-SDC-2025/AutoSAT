@@ -13,7 +13,7 @@ class RRTSim:
     def __init__(self, weights_path, input_source):
         self.object_detection = ObjectDetection(weights_path, input_source)
         self.model = torch.hub.load('ultralytics/yolov5', 'custom', path="assets/v5_model.pt", force_reload=True)
-        self.cam = cv2.VideoCapture("assets/CarCropped720.mp4")
+        self.cam = cv2.VideoCapture("assets/CarCropped.mp4")
         self.goal_set = False
         self.path_found = False
         self.goal = None
@@ -36,7 +36,7 @@ class RRTSim:
                 cv2.putText(frame, label, (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-                if det["class"] == "Car" and det["distance"] <= 10 and self.goal_set is False:
+                if det["class"] == "Car" and det["distance"] <= 5 and self.goal_set is False:
                     self.goal = self.set_goal(det)
                     self.goal_set = True
                     if self.goal:
@@ -102,8 +102,8 @@ class RRTSim:
                 for point in path:
                     print(point)
 
-                x_vals = [point[0] for point in path]
-                y_vals = [point[1] for point in path]
+                x_vals = [node.x for node in path]
+                y_vals = [node.y for node in path]
 
                 return x_vals, y_vals
 
@@ -123,8 +123,8 @@ class RRTSim:
             rect = plt.Rectangle((ox, oy), width, height, color='gray', alpha=0.5)
             plt.gca().add_patch(rect)
 
-        plt.xlim(-10, 10)
-        plt.ylim(0, 25)
+        plt.xlim(-5, 5)
+        plt.ylim(0, 15)
         plt.xlabel('X')
         plt.ylabel('Y')
         plt.title('RRT* Path Planning')
@@ -138,6 +138,3 @@ if __name__ == "__main__":
     handler = RRTSim(weights_path, input_source)
     handler.open_camera()
 
-    """camera_thread = threading.Thread(target=handler.open_camera())
-    plot_thread = threading.Thread(target=handler.plot_waypoints(goal = handler.)
-    camera_thread.start()"""
