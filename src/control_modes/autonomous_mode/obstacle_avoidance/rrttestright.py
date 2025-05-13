@@ -14,11 +14,11 @@ class Node:
 
 # RRT* algorithm
 class RRTStar:
-    def __init__(self, start, goal, num_obstacles, map_size, step_size=0.3, max_iter=500):
+    def __init__(self, start, goal, num_obstacles, map_size, step_size=0.5, max_iter=500, obstacles=None):
         self.start = start if isinstance(start, Node) else Node(start[0], start[1])
         self.goal = goal if isinstance(goal, Node) else Node(goal[0], goal[1])
         self.map_size = map_size
-        self.obstacles = self.generate_random_obstacles(num_obstacles)
+        self.obstacles = obstacles if obstacles is not None else self.generate_random_obstacles(num_obstacles)
         self.step_size = step_size
         self.max_iter = max_iter
         self.node_list = [self.start]
@@ -38,9 +38,9 @@ class RRTStar:
     def generate_random_obstacles(self, num_obstacles):
         obstacles = []
         for _ in range(num_obstacles):
-            ox = -1.25
-            oy = 4
-            width = 2.5
+            ox = -1.5
+            oy = 5
+            width = 3
             height = 4
             obstacles.append((ox, oy, width, height))  # Rectangle defined by bottom-left corner and size
         return obstacles
@@ -48,7 +48,8 @@ class RRTStar:
     def setup_visualization(self):
         self.ax.plot(self.start.x, self.start.y, 'bo', label='Start')
         self.ax.plot(self.goal.x, self.goal.y, 'ro', label='Goal')
-        self.ax.set_xlim(-10, self.map_size[0])
+        self.ax.set_xlim(-4, 4)
+        #self.ax.set_xlim(-self.map_size[0], self.map_size[0])
         self.ax.set_ylim(0, self.map_size[1])
         self.ax.grid(True)
 
@@ -59,6 +60,39 @@ class RRTStar:
         for (ox, oy, width, height) in self.obstacles:
             rect = plt.Rectangle((ox, oy), width, height, color='r')
             self.ax.add_patch(rect)
+
+    def smooth_path(self, path, iterations=100):
+        if not path:
+            return path
+
+        for _ in range(iterations):
+            i = random.randint(0, len(path) - 2)
+            j = random.randint(i + 1, len(path) - 1)
+
+            p1, p2 = path[i], path[j]
+            if self.is_straight_path_collision_free(p1, p2):
+                # Replace the intermediate points with the shortcut
+                path = path[:i + 1] + path[j:]
+        return path
+
+    def is_straight_path_collision_free(self, p1, p2):
+        x1, y1 = (p1.x, p1.y) if hasattr(p1, 'x') else (p1[0], p1[1])
+        x2, y2 = (p2.x, p2.y) if hasattr(p2, 'x') else (p2[0], p2[1])
+
+        dx = x2 - x1
+        dy = y2 - y1
+        distance = math.hypot(dx, dy)
+        steps = int(np.ceil(distance / 0.05))
+
+        for i in range(steps + 1):
+            t = i / steps
+            x = x1 + t * dx
+            y = y1 + t * dy
+
+            for (ox, oy, width, height) in self.obstacles:
+                if ox <= x <= ox + width and oy <= y <= oy + height:
+                    return False
+        return True
 
     def plan(self):
         """Main RRT* planning loop."""
@@ -79,19 +113,24 @@ class RRTStar:
                 return
 
     def get_random_node(self):
-        """Generate a random node in the map."""
-        if random.random() > 0.1:
-            rand_node = Node(random.uniform(0, self.map_size[0]), random.uniform(0, self.map_size[1]), random.uniform(0, 2 * math.pi))
+        if random.random() < 0.1:
+            return Node(self.goal.x, self.goal.y)
+
+        sample_near_obstacle = random.random() < 0.1
+        if sample_near_obstacle:
+            rand_x = random.uniform(-4, -2)
+            rand_y = random.uniform(-self.map_size[1]-0.5, self.map_size[1]+0.5)
         else:
-            rand_node = Node(self.goal.x, self.goal.y)
-        return rand_node
+            rand_x = random.uniform(-self.map_size[0], 0)
+            rand_y = random.uniform(-self.map_size[1], self.map_size[1])
+
+        return Node(rand_x, rand_y)
 
     def steer(self, from_node, to_node):
         """Steer from one node to another, step-by-step."""
-        #theta = math.atan2(to_node.y - from_node.y, from_node.x - to_node.x)
-        theta_right = math.atan2(to_node.y - from_node.y, to_node.x + from_node.x)
-        new_node = Node(from_node.x - self.step_size * math.cos(theta_right),
-                        from_node.y + self.step_size * math.sin(theta_right))
+        theta = math.atan2(to_node.y - from_node.y, to_node.x - from_node.x)
+        new_node = Node(from_node.x + self.step_size * math.cos(theta),
+                        from_node.y + self.step_size * math.sin(theta))
         new_node.cost = from_node.cost + self.step_size
         new_node.parent = from_node
         return new_node
@@ -127,9 +166,7 @@ class RRTStar:
         best_node = nearest_node
 
         for neighbor in neighbors:
-            cost = neighbor.cost + np.linalg.norm([new_node.x - neighbor.x, new_node.y - neighbor.y])
-            """test_node = Node(neighbor.x, neighbor.y, neighbor.theta)
-            test_node.parent = new_node"""
+            cost = neighbor.cost + math.hypot(new_node.x - neighbor.x, new_node.y - neighbor.y)
             if cost < neighbor.cost and self.is_collision_free(neighbor):
                 best_node = neighbor
                 min_cost = cost
@@ -141,9 +178,7 @@ class RRTStar:
     def rewire(self, new_node, neighbors):
         """Rewire the tree by checking if any neighbor should adopt the new node as a parent."""
         for neighbor in neighbors:
-            cost = new_node.cost + np.linalg.norm([neighbor.x - new_node.x, neighbor.y - new_node.y])
-            """test_node = Node(neighbor.x, neighbor.y, neighbor.theta)
-            test_node.parent = new_node"""
+            cost = neighbor.cost + math.hypot(new_node.x - neighbor.x, new_node.y - neighbor.y)
             if cost < neighbor.cost and self.is_collision_free(neighbor):
                 neighbor.parent = new_node
                 neighbor.cost = cost
@@ -153,13 +188,12 @@ class RRTStar:
         return np.linalg.norm([node.x - self.goal.x, node.y - self.goal.y]) < self.goal_region_radius
 
     def generate_final_path(self, goal_node):
-        """Generate the final path from the start to the goal."""
         path = []
         node = goal_node
         while node is not None:
-            path.append([node.x, node.y])
+            path.append(node)
             node = node.parent
-        return path[::-1]  # Reverse the path
+        return path[::-1]    # Reverse the path
 
     def get_nearest_node(self, node_list, rand_node):
         """Find the nearest node in the tree to the random node."""
@@ -173,9 +207,8 @@ class RRTStar:
             self.ax.plot([node.x, node.parent.x], [node.y, node.parent.y], "-b")
 
     def draw_path(self):
-        """Draw the final path from start to goal."""
         if self.path:
-            self.ax.plot([x[0] for x in self.path], [x[1] for x in self.path], '-g', label='Path')
+            self.ax.plot([node.x for node in self.path], [node.y for node in self.path], '-g', label='Path')
 
     def straighten_car(self):
         self.goal.x = 12
@@ -225,7 +258,7 @@ def animate(i):
         if rrt_star.reached_goal(new_node):
             rrt_star.path = rrt_star.generate_final_path(new_node)
             rrt_star.draw_path()
-            rrt_star.goal_reached = True  # Set the goal reached flag
+            rrt_star.goal_reached = True  # Set the goal reached flag"""
 
 # Main execution
 if __name__ == "__main__":
@@ -236,7 +269,9 @@ if __name__ == "__main__":
 
     rrt_star = RRTStar(start, goal, num_obstacles, map_size)
     rrt_star.search()
-    rrt_star.draw_path()
+    if rrt_star.path:
+        rrt_star.path = rrt_star.smooth_path(rrt_star.path, iterations=200)
+        rrt_star.draw_path()
 
     # Create animation
     ani = animation.FuncAnimation(rrt_star.fig, animate, frames=rrt_star.max_iter, interval=10, repeat=False)
