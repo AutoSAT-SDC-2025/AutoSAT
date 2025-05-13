@@ -167,16 +167,19 @@ class PedestrianHandler:
     def stop_car(self, object_distances):
         for obj in object_distances:
             if obj["distance"] < self.car_distance_threshold and obj["class"] == "Person":
-                self.can_controller.set_steering_and_throttle(0, 0)
-                self.can_controller.set_parking_mode(1)
+                ped_stop_stopping = self.can_controller.set_steering_and_throttle(0, 0)
+                ped_stop_parking = self.can_controller.set_parking_mode(1)
+                return ped_stop_stopping, ped_stop_parking
             else:
-                self.can_controller.set_parking_mode(0)
-                self.can_controller.set_steering_and_throttle(0, 300)
+                ped_stopping_non_parking = self.can_controller.set_parking_mode(0)
+                ped_stopping_driving = self.can_controller.set_steering_and_throttle(0, 300)
+                return ped_stopping_driving, ped_stopping_non_parking
 
     def continue_driving(self):
         if self.pedestrian_crossed():
-            self.can_controller.set_parking_mode(0)
-            self.can_controller.set_steering_and_throttle(0, 300)
+            ped_parking_mode = self.can_controller.set_parking_mode(0)
+            ped_driving_mode = self.can_controller.set_steering_and_throttle(0, 300)
+            return ped_driving_mode, ped_parking_mode
 
 def main():
     weights_path = "assets/v5_model.pt"
@@ -192,25 +195,20 @@ def main():
                 print("Failed to read from camera.")
                 break
 
-            # Run object detection
             detections = handler.object_detection.detect_objects(frame)
 
             if not detections:
                 continue
 
-            # Get pedestrian initial position once
             if not initial_position_set:
                 handler.get_initial_position(detections)
                 initial_position_set = True
 
-            # Update position and direction
             handler.get_current_pos(detections)
             handler.get_direction(detections)
 
-            # Determine distance to pedestrians
             object_distances = handler.determine_distance(detections, scan)
 
-            # Decide to stop or continue
             handler.stop_car(object_distances)
             handler.continue_driving()
 
