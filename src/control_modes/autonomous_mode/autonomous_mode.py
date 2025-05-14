@@ -186,7 +186,7 @@ class AutonomousMode(IControlMode, ABC):
         logging.info("Stopping autonomous mode.")
         self.localization_process.terminate()
         self.localization_process.join()
-        for cap in getattr(self, 'captures', {}).values():
+        for cap in (self.captures or {}).values():
             cap.release()
         if self.car_type == CarType.hunter:
             self.can_controller.set_control_mode(HunterControlMode.idle_mode)
