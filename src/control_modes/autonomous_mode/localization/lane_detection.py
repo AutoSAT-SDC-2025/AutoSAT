@@ -11,7 +11,7 @@ class LaneDetector():
         project_root = current_file.parents[3]  # adjust this number as needed
         config = configparser.ConfigParser()
         config.read(project_root/"config"/"config.ini")
-        self.pmatrix = np.load(config["LaneDetection"]["transformation"])
+        self.pmatrix = np.load(project_root/config["LaneDetection"]["transformation"])
 
     
     def __call__(self, img: np.array) -> Any:

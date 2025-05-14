@@ -10,8 +10,7 @@ class Mapper:
         project_root = current_file.parents[3]  # adjust this number as needed
         config = configparser.ConfigParser()
         config.read(project_root/"config"/"config.ini")
-        map = cv.imread(config["Mapper"]["map"], cv.IMREAD_GRAYSCALE)
-        self.map = map
+        self.map = cv.imread(project_root/config["Mapper"]["map"], cv.IMREAD_GRAYSCALE)
         self.offset = np.array([5000,0])
         self.pose_map_list = []
         self.scale = float(config["Mapper"]["scale"])

@@ -4,6 +4,7 @@ from .lane_detection import LaneDetector
 import numpy as np
 import cv2 as cv
 import time
+from pathlib import Path
 
 start_frame = 1119
 start_frame = 1552
@@ -14,8 +15,10 @@ theta = np.pi/2
 
 mapping = False
 
-# matrix = np.load("../var/B.npy")
-K = np.load("var/camera/middle.npy")
+# matrix = np.load("../v
+current_file = Path(__file__).resolve()
+project_root = current_file.parents[3]  # adjust this number as needed
+K = np.load(project_root/"var/camera/middle.npy")
 cap = cv.VideoCapture("/home/thimo/Seafile/Git/SDC/data/recording 29-03-2024 08-56-36.mp4")
 
 ret, prev_frame = cap.read()

@@ -16,7 +16,7 @@ class Localizer:
         project_root = current_file.parents[3]  # adjust this number as needed
         config = configparser.ConfigParser()
         config.read(project_root/"config"/"config.ini")
-        self.perspective_matrix = np.load(config["Localizer"]["transformation"])
+        self.perspective_matrix = np.load(project_root/config["Localizer"]["transformation"])
         self.width = int(config["Localizer"]["width"])
         self.height = int(config["Localizer"]["height"])
         self.scale = float(config["Localizer"]["scale"])

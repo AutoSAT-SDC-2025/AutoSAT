@@ -1,8 +1,15 @@
 import numpy as np
+from pathlib import Path
+import configparser
 
 
 class KalmanFilter:
     def __init__(self):
+        current_file = Path(__file__).resolve()
+        project_root = current_file.parents[3]  # adjust this number as needed
+        config = configparser.ConfigParser()
+        config.read(project_root/"config"/"config.ini")
+
         self.dt = 1
         # x, y, v, theta, omega
         self.x = np.array([[0], [0], [0], [0], [0]])  # state (location and velocity)
@@ -38,8 +45,14 @@ class KalmanFilter:
         self.R_A = np.diag(
             [5**2, 0.1**2]
         )  # GPS error 5m, IMU error 0.1 rad, speed error 2 m/s
+        self.R_A = np.diag(
+            [float(config["Kalman"]["speed"])**2, float(config["Kalman"]["rotation_speed"])**2]
+        )
         self.R_B = np.diag(
             [1**2, 1**2, 0.01**2]
+        )
+        self.R_B = np.diag(
+            [float(config["Kalman"]["x"])**2, float(config["Kalman"]["y"])**2, float(config["Kalman"]["theta"])**2]
         )
 
         # Error covariance matrix (P)
@@ -79,7 +92,11 @@ class KalmanFilter:
 
         # Sensor H_B
 
-        R_B = self.R_B*min(1/score, 10)
+        R_B = self.R_B*min(1/score, 100)
+        R_B = np.diag(
+            [self.R_B[0,0]*abs(np.cos(x_p[3,0]))+self.R_B[1,1]*abs(np.sin(x_p[3,0])), self.R_B[0,0]*abs(np.sin(x_p[3,0]))+self.R_B[1,1]*abs(np.cos(x_p[3,0])), self.R_B[2,2]]
+        )
+        print(R_B)
         K = p_p @ self.H_B.T @ np.linalg.inv(self.H_B @ p_p @ self.H_B.T + R_B)
         self.x = x_p + K @ (z_b - self.H_B @ x_p)
         self.P = (np.eye(5) - K @ self.H_B) @ p_p

@@ -68,7 +68,8 @@ class ParticleFilter:
         theta = particle[2]
         print("score", score)
         print("trust", trust_score)
-        score = min(1, np.exp(-2*(score*trust_score-6)))
+        score = min(1, np.exp(-2*(score-6)))*trust_score
+        print("SCORE:", score)
         self.kalman.predict(np.array([[v],[dtheta]]), np.array([[x],[y],[theta]]), score)
         self.x = self.kalman.x[0][0]
         self.y = self.kalman.x[1][0]
