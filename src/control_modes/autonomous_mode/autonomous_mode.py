@@ -93,7 +93,11 @@ class AutonomousMode(IControlMode, ABC):
             frames[cam_name] = frame
 
         try:
-            top_down = self.data.transform([frames['left'], frames['front'], frames['right']])
+            print("Stitching frames...")
+            print("Does left exist?", frames.get('left') is not None)
+            print("Does front exist?", frames.get('front') is not None)
+            print("Does right exist?", frames.get('right') is not None)
+            top_down = self.data.transform(frames['left'], frames['front'], frames['right'])
         except Exception as e:
             raise RuntimeError(f"Stitching error: {e}")
 
