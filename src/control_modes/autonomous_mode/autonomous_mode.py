@@ -41,7 +41,7 @@ class AutonomousMode(IControlMode, ABC):
             )
         )
 
-        self.captures = None
+        self.captures = {}
         self.car_type = car_type
         self.can_bus = connect_to_can_interface(0)
 
