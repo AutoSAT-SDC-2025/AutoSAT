@@ -32,7 +32,7 @@ class AutonomousMode(IControlMode, ABC):
     def __init__(self, car_type: CarType, use_checkpoint_mode=False):
 
         self.data = CalibrationData(
-            path="/assets/calibration/latest.npz",
+            path="assets/calibration/latest.npz",
             input_shape=(1920, 1080),
             output_shape=(LineDetectionDims['width'], LineDetectionDims['height']),
             render_distance=RenderDistance(
