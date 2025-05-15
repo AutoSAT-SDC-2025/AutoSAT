@@ -7,7 +7,7 @@ class CamConfig(TypedDict):
     front: str
     left: str
     right: str
-def get_camera_config(config_folder: str = "assets/configs") -> Optional[CamConfig]:
+def get_camera_config(config_folder: str = "configs") -> Optional[CamConfig]:
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     abs_config_folder = os.path.join(project_root, config_folder)
 

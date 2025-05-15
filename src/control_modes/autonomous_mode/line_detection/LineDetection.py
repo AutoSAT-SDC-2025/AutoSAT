@@ -21,16 +21,24 @@ class LineFollowingNavigation:
         return 0
 
     def splitLines(self, lines):
+        """Split lines into left and right with simplified logic."""
+        if not lines:
+            return [], []
+            
         left_lines = []
         right_lines = []
+        
         for line in lines:
             x1, y1, x2, y2 = line
-            line_params = np.polyfit((x1, x2), (y1, y2), 1)
-            angle = (180 / np.pi) * np.arctan(line_params[0])
-            if angle > 5:
-                right_lines.append(line)
-            if angle < -5:
+            
+            # Simply divide based on position relative to center
+            mid_x = (x1 + x2) / 2
+            
+            if mid_x < self.width / 2:
                 left_lines.append(line)
+            else:
+                right_lines.append(line)
+                    
         return left_lines, right_lines
 
     def longestLine(self, lines):
@@ -179,49 +187,174 @@ class LineFollowingNavigation:
         return target, visuals
 
     def processFrame(self, img, horizon_height=280, weight_factor=1, bias=0):
-        """Process a frame to find the line following target.
-
-        Parameters:
-        img (ndarray): Input image frame
-        horizon_height (int): Height of the horizon line for target calculation
-        weight_factor (float): Weight factor for line calculation
-        bias (float): Bias adjustment for target position
-
-        Returns:
-        tuple: (target position, visualization image if draw=1)
-        """
-        # Resize image if needed
+        """Process a frame to find the line following target with improved wall filtering."""
         if img.shape[1] != self.width or img.shape[0] != self.height:
             img = cv2.resize(img, (self.width, self.height))
 
-        # Detect lines in the image
-        lines = getLines(img, self.scale, self.height, self.width)
-
-        # Process detected lines
+        # Handle glare in the image
+        img = self.detect_and_handle_glare(img)
+        
+        visuals = []
+        
+        # Quick preprocessing - reduce resolution for faster processing
+        small_img = cv2.resize(img, (self.width // 2, self.height // 2))
+        
+        # Apply a tighter mask to focus on the road region only
+        road_mask = np.zeros_like(small_img[:,:,0])
+        center_width = int(small_img.shape[1] * 0.6)  # Focus on central 60%
+        x_start = (small_img.shape[1] - center_width) // 2
+        x_end = x_start + center_width
+        road_mask[:, x_start:x_end] = 255
+        
+        # Display road mask
+        cv2.imshow("1. Road Mask", road_mask)
+        
+        # Apply mask to small image
+        small_masked = cv2.bitwise_and(small_img, small_img, mask=road_mask)
+        
+        # Display masked image
+        cv2.imshow("2. Masked Image", small_masked)
+        
+        # Fast grayscale conversion
+        gray = cv2.cvtColor(small_masked, cv2.COLOR_BGR2GRAY)
+        
+        # Display grayscale image
+        cv2.imshow("3. Grayscale", gray)
+        
+        # Apply direct threshold to isolate white lines - with higher threshold to exclude walls
+        _, binary = cv2.threshold(gray, 190, 255, cv2.THRESH_BINARY)  # Increased from 180 to 190
+        
+        # Display thresholded image
+        cv2.imshow("4. Thresholded", binary)
+        
+        # Focus only on bottom part of image
+        roi_height = int(small_img.shape[0] * 0.5)  # Increased from 0.4 to 0.5
+        binary_roi = binary.copy()
+        binary_roi[:small_img.shape[0] - roi_height, :] = 0
+        
+        # Display ROI image
+        cv2.imshow("5. ROI", binary_roi)
+        
+        # Quick dilation to connect broken lines
+        kernel = np.ones((3, 3), np.uint8)
+        binary_dilated = cv2.dilate(binary_roi, kernel, iterations=1)
+        
+        # Display dilated image
+        cv2.imshow("6. Dilated", binary_dilated)
+        
+        # Direct Hough line detection on binary image
+        lines = cv2.HoughLinesP(
+            binary_dilated,
+            rho=1,
+            theta=np.pi/180,
+            threshold=30,
+            minLineLength=25,  # Increased from 20 to 25
+            maxLineGap=10
+        )
+        
+        # Create visualization of detected lines
+        line_vis = cv2.cvtColor(binary_dilated, cv2.COLOR_GRAY2BGR)
         if lines is not None:
-            # Get the new processed lines
-            processed_lines = self.newLines(lines)
+            for line in lines:
+                x1, y1, x2, y2 = line[0]
+                cv2.line(line_vis, (x1, y1), (x2, y2), (0, 0, 255), 2)
 
-            # Split into left and right lines
-            if processed_lines:
-                left_lines, right_lines = self.splitLines(processed_lines)
+        # Display lines on binary image
+        cv2.imshow("7. Detected Lines", line_vis)
 
-                # Find target based on detected lines
-                return self.findTarget(left_lines, right_lines, horizon_height, img, weight_factor=weight_factor, bias=bias)
+        # Scale lines back to original size
+        scaled_lines = []
+        if lines is not None:
+            for line in lines:
+                x1, y1, x2, y2 = line[0]
+                scaled_lines.append([x1*2, y1*2, x2*2, y2*2])
 
-        # No valid lines detected
-        return None, img
+        if scaled_lines:
+            # LESS AGGRESSIVE filtering of lines to exclude walls
+            filtered_lines = []
+            
+            # Create debug visualization for angles
+            debug_vis = np.zeros((self.height, self.width, 3), dtype=np.uint8)
+            
+            for line in scaled_lines:
+                x1, y1, x2, y2 = line
+                
+                # Skip very short lines - less restrictive
+                length = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+                if length < 30:  # Reduced from 40 to 30
+                    continue
+                    
+                # Only consider lines with appropriate angles
+                dx = x2 - x1
+                dy = y2 - y1
+                if abs(dx) < 1:  # Avoid division by zero
+                    continue
+                    
+                # Calculate angle
+                angle = abs(np.arctan2(dy, dx) * 180 / np.pi)
+                
+                # Color code by angle in debug vis
+                if angle < 60:
+                    color = (0, 0, 255)  # Red for angles < 60
+                elif angle > 120:
+                    color = (255, 0, 0)  # Blue for angles > 120
+                else:
+                    color = (0, 255, 0)  # Green for angles 60-120
+                    
+                cv2.line(debug_vis, (x1, y1), (x2, y2), color, 2)
+                mid_x = (x1 + x2) // 2
+                mid_y = (y1 + y2) // 2
+                cv2.putText(debug_vis, f"{angle:.0f}", (mid_x, mid_y), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                
+                # Wider angle range to include more potential lane lines
+                if 60 < angle < 120:  # Wider range (was 70-110)
+                    # Less restrictive edge filtering
+                    mid_x = (x1 + x2) / 2
+                    distance_from_edge = min(mid_x, self.width - mid_x)
+                    
+                    # Allow lines closer to edges
+                    if distance_from_edge > (self.width * 0.05):  # Reduced from 10% to 5%
+                        filtered_lines.append(line)
+    
+        # Display debug visualization for angles
+        cv2.imshow("8. Line Angles", debug_vis)
+        
+        # Create visualization of filtered lines
+        filtered_vis = np.zeros((self.height, self.width, 3), dtype=np.uint8)
+        for line in filtered_lines:
+            x1, y1, x2, y2 = line
+            cv2.line(filtered_vis, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        
+        # Display filtered lines
+        cv2.imshow("9. Filtered Lines", filtered_vis)
+        
+        # Split lines into left and right
+        left_lines = []
+        right_lines = []
+        
+        for line in filtered_lines:
+            x1, y1, x2, y2 = line
+            mid_x = (x1 + x2) / 2
+            
+            if mid_x < self.width / 2:
+                left_lines.append(line)
+            else:
+                right_lines.append(line)
+        
+        # Find target
+        if left_lines or right_lines:
+            target, target_visuals = self.findTarget(
+                left_lines, right_lines, horizon_height, img,
+                weight_factor=weight_factor, bias=bias
+            )
+            visuals.extend(target_visuals)
+            return target, visuals
+
+        return None, visuals
 
     def calculateSteeringAngle(self, target, mid_point=None):
-        """Calculate steering angle based on target position.
-
-        Parameters:
-        target: Target x-position
-        mid_point: Middle point of the frame (if None, use self.width/2)
-
-        Returns:
-        float: Steering angle in degrees (-30 to 30)
-        """
+        """Calculate steering angle with reduced sensitivity for smoother control."""
         if target is None:
             return 0.0
 
@@ -230,14 +363,27 @@ class LineFollowingNavigation:
 
         # Calculate offset from center
         offset = target - mid_point
-
-        # Convert to steering angle (scale to range -30 to 30 degrees)
+        
+        # Add a dead zone to reduce sensitivity to small movements
+        dead_zone = self.width * 0.05  # 5% dead zone
+        if abs(offset) < dead_zone:
+            return 0.0
+        elif offset > 0:
+            offset -= dead_zone
+        else:
+            offset += dead_zone
+            
+        # Use non-linear response for smoother steering
+        normalized_offset = offset / (self.width / 2)
+        steering_factor = (normalized_offset**3 * 0.7) + (normalized_offset * 0.3)
+        
+        # Convert to steering angle
         max_angle = 30.0
-        steering_angle = (offset / (self.width / 2)) * max_angle
-
+        steering_angle = steering_factor * max_angle
+        
         # Limit to max angle
         steering_angle = max(min(steering_angle, max_angle), -max_angle)
-
+        
         return steering_angle
 
     def calculateSpeed(self, steering_angle, base_speed=100):
@@ -321,3 +467,148 @@ class LineFollowingNavigation:
         """Process a single frame and return the results."""
         steering_angle, speed, visuals = self.run(frame, base_speed, draw)
         return steering_angle, speed, visuals
+
+    def filterLinesByDistance(self, lines):
+        """A faster implementation to filter lines by distance."""
+        if not lines:
+            return []
+        
+        # Filter by position, prioritizing lines closer to expected lane positions
+        lane_width = self.width * 0.25  # Approximate lane width
+        left_lane_x = self.width / 2 - lane_width / 2
+        right_lane_x = self.width / 2 + lane_width / 2
+        
+        scored_lines = []
+        for line in lines:
+            x1, y1, x2, y2 = line
+            mid_x = (x1 + x2) / 2
+            
+            # Calculate score based on distance to expected lane position
+            left_distance = abs(mid_x - left_lane_x)
+            right_distance = abs(mid_x - right_lane_x)
+            min_distance = min(left_distance, right_distance)
+            
+            # Also consider line length - longer is better
+            length = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+            
+            # Combined score (lower is better)
+            score = min_distance / length
+            
+            scored_lines.append((line, score))
+        
+        # Sort by score
+        scored_lines.sort(key=lambda x: x[1])
+        
+        # Return the best lines, up to 4
+        return [line for line, _ in scored_lines[:4]]
+
+    def distanceToPosition(self, line, position):
+        """Calculate minimum distance from a line to a position."""
+        x1, y1, x2, y2 = line
+        
+        # Calculate distances from both endpoints to position
+        dist1 = np.sqrt((x1 - position[0])**2 + (y1 - position[1])**2)
+        dist2 = np.sqrt((x2 - position[0])**2 + (y2 - position[1])**2)
+        
+        # Return the minimum distance
+        return min(dist1, dist2)
+
+    def getCustomLines(self, img, binary_mask):
+        """A much faster line detection implementation."""
+        # Convert to grayscale
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        
+        # Apply threshold
+        _, binary = cv2.threshold(gray, 170, 255, cv2.THRESH_BINARY)
+        
+        # Combine with mask
+        masked = cv2.bitwise_and(binary, binary_mask)
+        
+        # Fast Hough transform
+        lines = cv2.HoughLinesP(
+            masked,
+            rho=1,
+            theta=np.pi/180,
+            threshold=20,
+            minLineLength=int(self.scale * 25),
+            maxLineGap=int(self.scale * 15)
+        )
+        
+        if lines is None:
+            return None
+        
+        # Simple filtering
+        filtered_lines = []
+        for line in lines:
+            x1, y1, x2, y2 = line[0]
+            
+            # Skip horizontal lines
+            if abs(y2 - y1) < 10:
+                continue
+                
+            filtered_lines.append(line)
+            
+        return filtered_lines if filtered_lines else None
+
+    def detect_and_handle_glare(self, img):
+        """Detect and reduce glare in the image for better line detection."""
+        # Convert to HSV for better glare detection
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        
+        # Glare typically has high V (brightness) values
+        _, _, v = cv2.split(hsv)
+        
+        # Threshold to find bright areas (potential glare)
+        _, glare_mask = cv2.threshold(v, 220, 255, cv2.THRESH_BINARY)
+        
+        # Dilate to ensure we capture all glare regions
+        kernel = np.ones((5, 5), np.uint8)
+        glare_mask = cv2.dilate(glare_mask, kernel, iterations=1)
+        
+        # Calculate the percentage of the image affected by glare
+        glare_percentage = (np.sum(glare_mask) / 255) / (img.shape[0] * img.shape[1]) * 100
+        
+        # If significant glare is detected, apply correction
+        if glare_percentage > 5:
+            # Create a visualization of detected glare
+            glare_vis = img.copy()
+            glare_vis[glare_mask > 0] = [0, 0, 255]  # Mark glare areas in red
+            cv2.imshow("Glare Detection", glare_vis)
+            
+            # Apply adaptive correction based on glare severity
+            if glare_percentage > 15:
+                # Create mask for non-glare regions (inverse of glare mask)
+                non_glare_mask = cv2.bitwise_not(glare_mask)
+                
+                # Apply a light blur to reduce the effect of glare
+                blurred = cv2.GaussianBlur(img, (15, 15), 0)
+                
+                # Create result by taking original image in non-glare regions
+                # and blurred image in glare regions
+                result = img.copy()
+                result[glare_mask > 0] = blurred[glare_mask > 0]
+                
+                # Adjust contrast in glare regions to improve line detection
+                glare_region = result[glare_mask > 0]
+                if glare_region.size > 0:
+                    # Apply contrast reduction only to glare regions
+                    adjusted = cv2.addWeighted(
+                        glare_region, 0.6, np.zeros_like(glare_region), 0, 30
+                    )
+                    result[glare_mask > 0] = adjusted
+            
+                return result
+            elif glare_percentage > 10:
+                # For moderate glare, just reduce contrast in glare regions
+                result = img.copy()
+                glare_region = result[glare_mask > 0]
+                if glare_region.size > 0:
+                    adjusted = cv2.addWeighted(
+                        glare_region, 0.8, np.zeros_like(glare_region), 0, 20
+                    )
+                    result[glare_mask > 0] = adjusted
+            
+                return result
+    
+        # If no significant glare, return original image
+        return img

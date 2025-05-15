@@ -13,7 +13,7 @@ from ...can_interface.can_factory import select_can_controller_creator, create_c
 from ...util.Render import Renderer
 # from navigation.modes.Checkpoint import Checkpoint
 # from stitching import Stitcher
-from .localization import localization
+# from .localization import localization
 import multiprocessing as mp
 
 import cv2
@@ -32,7 +32,7 @@ class AutonomousMode(IControlMode, ABC):
     def __init__(self, car_type: CarType, use_checkpoint_mode=False):
 
         self.data = CalibrationData(
-            path="/assets/calibration/latest.npz",
+            path="assets/calibration/latest.npz",
             input_shape=(1920, 1080),
             output_shape=(LineDetectionDims['width'], LineDetectionDims['height']),
             render_distance=RenderDistance(
@@ -41,7 +41,7 @@ class AutonomousMode(IControlMode, ABC):
             )
         )
 
-        self.captures = None
+        self.captures = {}
         self.car_type = car_type
         self.can_bus = connect_to_can_interface(0)
 
@@ -63,8 +63,8 @@ class AutonomousMode(IControlMode, ABC):
         self.location.y = 0 
         self.location.theta = 0 
         self.location.img = None
-        self.localization_process = mp.Process(target=localization.localization_worker, args=(self.location,))
-        self.localization_process.start()
+        # self.localization_process = mp.Process(target=localization.localization_worker, args=(self.location,))
+        # self.localization_process.start()
 
     def setup_cameras(self):
         self.captures = {}
@@ -78,14 +78,15 @@ class AutonomousMode(IControlMode, ABC):
             if not cap.isOpened():
                 raise RuntimeError(f"Failed to open {cam_name} camera at {cam_path}")
 
+            for _ in range(2):  # Warm-up camera
+                cap.read()
+
             self.captures[cam_name] = cap
+            print("Completed camera setup for ", cam_name, " at ", cam_path)
 
     def capture(self):
         frames = {}
         for cam_name, cap in self.captures.items():
-            for _ in range(2):  # Warm-up frames
-                cap.read()
-
             ret, frame = cap.read()
             if not ret:
                 raise RuntimeError(f"Failed to read frame from {cam_name} camera.")
@@ -93,6 +94,10 @@ class AutonomousMode(IControlMode, ABC):
             frames[cam_name] = frame
 
         try:
+            print("Stitching frames...")
+            print("Does left exist?", frames.get('left') is not None)
+            print("Does front exist?", frames.get('front') is not None)
+            print("Does right exist?", frames.get('right') is not None)
             top_down = self.data.transform([frames['left'], frames['front'], frames['right']])
         except Exception as e:
             raise RuntimeError(f"Stitching error: {e}")
@@ -113,6 +118,8 @@ class AutonomousMode(IControlMode, ABC):
 
     def start(self):
         logging.info("Starting autonomous mode...")
+        self.setup_cameras()
+
         try:
             self.can_controller.start()
             if self.car_type == CarType.kart:
@@ -184,9 +191,9 @@ class AutonomousMode(IControlMode, ABC):
 
     def stop(self) -> None:
         logging.info("Stopping autonomous mode.")
-        self.localization_process.terminate()
-        self.localization_process.join()
-        for cap in getattr(self, 'captures', {}).values():
+        # self.localization_process.terminate()
+        # self.localization_process.join()
+        for cap in (self.captures or {}).values():
             cap.release()
         if self.car_type == CarType.hunter:
             self.can_controller.set_control_mode(HunterControlMode.idle_mode)
