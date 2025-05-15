@@ -179,56 +179,38 @@ class LineFollowingNavigation:
         return target, visuals
 
     def processFrame(self, img, horizon_height=280, weight_factor=1, bias=0):
-        """Process a frame to find the line following target."""
+        """Process a frame to find the line following target.
+
+        Parameters:
+        img (ndarray): Input image frame
+        horizon_height (int): Height of the horizon line for target calculation
+        weight_factor (float): Weight factor for line calculation
+        bias (float): Bias adjustment for target position
+
+        Returns:
+        tuple: (target position, visualization image if draw=1)
+        """
+        # Resize image if needed
         if img.shape[1] != self.width or img.shape[0] != self.height:
             img = cv2.resize(img, (self.width, self.height))
 
-        visuals = []
+        # Detect lines in the image
+        lines = getLines(img, self.scale, self.height, self.width)
 
-        # Define ROI bounds
-        side_width = int(self.width * 0.25)
-        mask = np.zeros_like(img[:, :, 0])  # Single channel mask
-        mask[:, :side_width] = 255  # Left side
-        mask[:, -side_width:] = 255  # Right side
-
-        # Visualize ROI area
-        visuals.extend([
-            {
-                'type': 'rectangle',
-                'start': (0, 0),
-                'end': (side_width, self.height),
-                'color': (0, 255, 255),
-                'thickness': -1,
-                'alpha': 0.2
-            },
-            {
-                'type': 'rectangle',
-                'start': (self.width - side_width, 0),
-                'end': (self.width, self.height),
-                'color': (0, 255, 255),
-                'thickness': -1,
-                'alpha': 0.2
-            }
-        ])
-
-        # Apply mask to image before line detection
-        masked_img = cv2.bitwise_and(img, img, mask=mask)
-
-        # Detect lines
-        lines = getLines(masked_img, self.scale, self.height, self.width)
-
+        # Process detected lines
         if lines is not None:
+            # Get the new processed lines
             processed_lines = self.newLines(lines)
+
+            # Split into left and right lines
             if processed_lines:
                 left_lines, right_lines = self.splitLines(processed_lines)
-                target, target_visuals = self.findTarget(
-                    left_lines, right_lines, horizon_height, img,
-                    weight_factor=weight_factor, bias=bias
-                )
-                visuals.extend(target_visuals)
-                return target, visuals
 
-        return None, visuals
+                # Find target based on detected lines
+                return self.findTarget(left_lines, right_lines, horizon_height, img, weight_factor=weight_factor, bias=bias)
+
+        # No valid lines detected
+        return None, img
 
     def calculateSteeringAngle(self, target, mid_point=None):
         """Calculate steering angle based on target position.
