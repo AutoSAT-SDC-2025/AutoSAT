@@ -78,14 +78,15 @@ class AutonomousMode(IControlMode, ABC):
             if not cap.isOpened():
                 raise RuntimeError(f"Failed to open {cam_name} camera at {cam_path}")
 
+            for _ in range(2):  # Warm-up camera
+                cap.read()
+
             self.captures[cam_name] = cap
+            print("Completed camera setup for ", cam_name, " at ", cam_path)
 
     def capture(self):
         frames = {}
         for cam_name, cap in self.captures.items():
-            for _ in range(2):  # Warm-up frames
-                cap.read()
-
             ret, frame = cap.read()
             if not ret:
                 raise RuntimeError(f"Failed to read frame from {cam_name} camera.")
