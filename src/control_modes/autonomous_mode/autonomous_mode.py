@@ -98,7 +98,7 @@ class AutonomousMode(IControlMode, ABC):
             print("Does left exist?", frames.get('left') is not None)
             print("Does front exist?", frames.get('front') is not None)
             print("Does right exist?", frames.get('right') is not None)
-            top_down = self.data.transform(frames['left'], frames['front'], frames['right'])
+            top_down = self.data.transform([frames['left'], frames['front'], frames['right']])
         except Exception as e:
             raise RuntimeError(f"Stitching error: {e}")
 
