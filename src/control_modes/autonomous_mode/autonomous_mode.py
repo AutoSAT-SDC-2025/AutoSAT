@@ -13,7 +13,7 @@ from ...can_interface.can_factory import select_can_controller_creator, create_c
 from ...util.Render import Renderer
 # from navigation.modes.Checkpoint import Checkpoint
 # from stitching import Stitcher
-# from .localization import localization
+from .localization import localization
 import multiprocessing as mp
 
 import cv2
@@ -63,8 +63,8 @@ class AutonomousMode(IControlMode, ABC):
         self.location.y = 0 
         self.location.theta = 0 
         self.location.img = None
-        # self.localization_process = mp.Process(target=localization.localization_worker, args=(self.location,))
-        # self.localization_process.start()
+        self.localization_process = mp.Process(target=localization.localization_worker, args=(self.location,))
+        self.localization_process.start()
 
     def setup_cameras(self):
         self.captures = {}
@@ -191,8 +191,8 @@ class AutonomousMode(IControlMode, ABC):
 
     def stop(self) -> None:
         logging.info("Stopping autonomous mode.")
-        # self.localization_process.terminate()
-        # self.localization_process.join()
+        self.localization_process.terminate()
+        self.localization_process.join()
         for cap in (self.captures or {}).values():
             cap.release()
         if self.car_type == CarType.hunter:
