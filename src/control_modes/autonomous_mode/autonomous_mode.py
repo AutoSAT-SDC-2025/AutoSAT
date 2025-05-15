@@ -118,6 +118,8 @@ class AutonomousMode(IControlMode, ABC):
 
     def start(self):
         logging.info("Starting autonomous mode...")
+        self.setup_cameras()
+
         try:
             self.can_controller.start()
             if self.car_type == CarType.kart:
