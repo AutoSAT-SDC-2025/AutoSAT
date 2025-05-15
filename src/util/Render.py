@@ -21,8 +21,11 @@ class Renderer:
                     cv2.arrowedLine(frame, op["start"], op["end"], op["color"], op["thickness"])
                 elif op["type"] == "text":
                     cv2.putText(frame, op["text"], op["position"], cv2.FONT_HERSHEY_SIMPLEX, op.get("scale", 0.5), op["color"], op.get("thickness", 1))
-                elif op["type"] == "rect":
-                    cv2.rectangle(frame, op["top_left"], op["bottom_right"], op["color"], op["thickness"])
+                elif op['type'] == 'rectangle':
+                    overlay = output.copy()
+                    cv2.rectangle(overlay, op['start'], op['end'], op['color'], op['thickness'])
+                    alpha = op.get('alpha', 1.0)
+                    output = cv2.addWeighted(overlay, alpha, output, 1 - alpha, 0)
                 elif op["type"] == "circle":
                     cv2.circle(frame, op["center"], op["radius"], op["color"], op["thickness"])
             except Exception as e:
