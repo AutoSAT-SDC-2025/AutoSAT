@@ -135,6 +135,7 @@ def localization_worker(shared):
         if not np.array_equal(shared.img, img):
             img = shared.img
             lane = lane_detector(img)
+            cv.imshow("lane", lane)
             localizer.update(img, lane)
             shared.x = localizer.x
             shared.y = localizer.y
