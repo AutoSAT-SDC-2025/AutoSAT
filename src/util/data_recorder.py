@@ -169,7 +169,7 @@ def initialize_can() -> can.Bus:
     """
     Set up the can bus interface and apply filters for the messages we're interested in.
     """
-    bus = can.Bus(interface='socketcan', channel='can0', bitrate=500000)
+    bus = can.Bus(interface='socketcan', channel='can1', bitrate=500000)
     bus.set_filters([
         {'can_id': 0x110, 'can_mask': 0xfff, 'extended': False},  # Steering
         {'can_id': 0x220, 'can_mask': 0xfff, 'extended': False},  # Throttle
