@@ -74,6 +74,7 @@ class AutonomousMode(IControlMode, ABC):
     def setup_cameras(self):
         self.captures = {}
         for cam_name in ['left', 'front', 'right']:
+            print("Attempting to setup camera: ", cam_name)
             cam_path = self.cams[cam_name]
             cap = cv2.VideoCapture(cam_path)
 
