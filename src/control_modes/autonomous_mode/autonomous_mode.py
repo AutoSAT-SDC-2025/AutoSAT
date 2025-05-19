@@ -107,7 +107,6 @@ class AutonomousMode(IControlMode, ABC):
             cv2.imwrite(stitched_filename, top_down)
         except Exception as e:
             raise RuntimeError(f"Stitching error: {e}")
-
         front_frame = frames['front']
         self.location.img = front_frame
         front_frame = cv2.resize(front_frame, (WIDTH, HEIGHT))
