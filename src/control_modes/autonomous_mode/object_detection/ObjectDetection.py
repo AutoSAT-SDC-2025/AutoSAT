@@ -1,10 +1,14 @@
+import os
+
 import cv2
-from Detection import ObjectDetection
-from TrafficDetection import TrafficManager
+from .Detection import ObjectDetection
+from .TrafficDetection import TrafficManager
+from ....util.Render import Renderer
 
 def main(weights_path: str, input_source: str, video_path: str = None):
     object_detector = ObjectDetection(weights_path, input_source)
     traffic_manager = TrafficManager()
+    renderer = Renderer()
     
     if input_source == 'video' and video_path:
         cap = cv2.VideoCapture(video_path)
@@ -15,17 +19,12 @@ def main(weights_path: str, input_source: str, video_path: str = None):
         ret, frame = cap.read()
         if not ret:
             break
+        renderer.clear()
 
-        detections = object_detector.detect_objects(frame)
-        traffic_state = traffic_manager.process_traffic_signals(detections)
-        print("Traffic State:", traffic_state)
+        traffic_state, detections, object_visuals = object_detector.process(frame)
+        renderer.add_drawings(object_visuals)
 
-        for det in detections:
-            x1, y1, x2, y2 = det['bbox']
-            class_label = det['class']
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(frame, f"{class_label} ({det['distance']:.2f}m)", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-
+        renderer.draw(frame)
         cv2.imshow('Traffic Detection', frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
@@ -34,5 +33,7 @@ def main(weights_path: str, input_source: str, video_path: str = None):
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
+    print("Current working dir:", os.getcwd())
+
     # Use v5_model.pt (model from last year) on the video (default.mp4)
-    main('assets/v5_model.pt', 'video', 'assets/Person.mp4')
+    main('assets/v5_model.pt', 'video', 'assets/default.mp4')

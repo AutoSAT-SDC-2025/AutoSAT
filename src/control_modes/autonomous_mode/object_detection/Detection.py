@@ -7,6 +7,7 @@ from yolov5.utils.torch_utils import select_device
 
 from .TrafficDetection import TrafficManager
 
+
 class ObjectDetection:
     def __init__(self, weights_path: str, input_source: str = 'video'):
         self.device = select_device('cpu')
@@ -46,8 +47,9 @@ class ObjectDetection:
 
     def detect_objects(self, frame):
         img_size = check_img_size(frame.shape[:2], s=32)
-        img = cv2.resize(frame, (img_size[1], img_size[0]))
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        frame_resized = cv2.resize(frame, (img_size[1], img_size[0]))
+        img = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
+
         img = img.transpose((2, 0, 1))
         img = torch.from_numpy(np.expand_dims(img, axis=0)).float() / 255.0
         img = img.to(self.device)
@@ -69,6 +71,28 @@ class ObjectDetection:
         return detections
 
     def process(self, frame):
+        draw_instructions = []
         detections = self.detect_objects(frame)
+        for det in detections:
+            x1, y1, x2, y2 = det['bbox']
+            class_label = det['class']
+
+            draw_instructions.append({
+                'type': 'rect',
+                'top_left': (x1, y1),
+                'bottom_right': (x2, y2),
+                'color': (0, 255, 0),
+                'thickness': 2
+            })
+
+            draw_instructions.append({
+                'type': 'text',
+                'text': f"{class_label} ({det['distance']:.2f}m)",
+                'position': (x1, y1 - 10),
+                'font': 'FONT_HERSHEY_SIMPLEX',
+                'font_scale': 0.6,
+                'color': (0, 255, 0),
+                'thickness': 2
+            })
         traffic_state = self.traffic_manager.process_traffic_signals(detections)
-        return traffic_state, detections
+        return traffic_state, detections, draw_instructions

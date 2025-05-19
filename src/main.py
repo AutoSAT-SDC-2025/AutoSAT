@@ -1,16 +1,21 @@
 import logging
-from src.car_variables import CarType
-from src.control_modes.autonomous_mode.old_twente_code import go, new_go
-from src.control_modes.manual_mode.manual_mode import ManualMode
 
+from src.car_variables import CarType
+from src.control_modes.autonomous_mode.autonomous_mode import AutonomousMode
+from src.control_modes.manual_mode.manual_mode import ManualMode
+# from src.car_variables import CarType
+# from src.control_modes.manual_mode.manual_mode import ManualMode
+# from src.control_modes.autonomous_mode.autonomous_mode import AutonomousMode
+from src.util.Calibrate import calibrate_connected_cameras, transform_camera_image
 
 def main():
     logging.basicConfig(level=logging.INFO)
-    mode = input("Which mode do you want to launch. 1 for manual, 2 for autonomous: ")
+    mode = input("Which mode do you want to launch. 1 for manual, 2 for autonomous, 3 to calibrate, 4 to pray: ")
     try:
-        car = int(input("Which car are we using: 0 for kart, 1 for hunter: "))
-        if car not in [0, 1]:
-            raise ValueError("Invalid car type. Please enter 0 for kart or 1 for hunter.")
+        if mode not in ["3"] and mode not in ["4"]: # maybe more later.
+            car = int(input("Which car are we using: 0 for kart, 1 for hunter: "))
+            if car not in [0, 1]:
+                raise ValueError("Invalid car type. Please enter 0 for kart or 1 for hunter.")
     except ValueError as e:
         print(e)
         return
@@ -18,9 +23,17 @@ def main():
     if mode == "1":
         manual = ManualMode(CarType(car))
         manual.start()
+
     elif mode == "2":
-        new_go.main()
+        auto = AutonomousMode(CarType(car))
+        auto.start()
+
+    elif mode == "3":
+        calibrate_connected_cameras(save_path="assets/calibration")
     # go.main()
+
+    elif mode == "4":
+        transform_camera_image()
 
 if __name__ == "__main__":
     main()

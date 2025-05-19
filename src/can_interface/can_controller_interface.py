@@ -19,5 +19,13 @@ class ICanController(ABC):
         pass
 
     @abstractmethod
+    def set_break(self, break_value: int) -> None:
+        pass
+
+    @abstractmethod
+    def set_kart_gearbox(self, kart_gearbox) -> None:
+        pass
+
+    @abstractmethod
     def start(self) -> None:
         pass
