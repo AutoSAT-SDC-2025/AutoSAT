@@ -2,7 +2,7 @@
 
 import sys
 import cv2
-import video
+import vid
 import can
 import os
 import threading
