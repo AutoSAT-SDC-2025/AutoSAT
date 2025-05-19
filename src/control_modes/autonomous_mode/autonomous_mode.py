@@ -1,3 +1,4 @@
+import os
 from abc import ABC
 
 from src.util.video import get_camera_config, validate_camera_config
@@ -27,6 +28,7 @@ LineDetectionDims = {
     'height': 720
 }
 
+
 class AutonomousMode(IControlMode, ABC):
 
     def __init__(self, car_type: CarType, use_checkpoint_mode=False):
@@ -40,7 +42,10 @@ class AutonomousMode(IControlMode, ABC):
                 sides=6.0
             )
         )
-
+        # Add at the top or class level if needed
+        self.frame_save_dir = "capture_" + str(os.getpid())
+        os.makedirs(self.frame_save_dir, exist_ok=True)
+        self.frame_counter = 0  # Track frame number
         self.captures = {}
         self.car_type = car_type
         self.can_bus = connect_to_can_interface(0)
@@ -59,9 +64,9 @@ class AutonomousMode(IControlMode, ABC):
 
         localization_manager = mp.Manager()
         self.location = localization_manager.Namespace()
-        self.location.x = 0 
-        self.location.y = 0 
-        self.location.theta = 0 
+        self.location.x = 0
+        self.location.y = 0
+        self.location.theta = 0
         self.location.img = None
         # self.localization_process = mp.Process(target=localization.localization_worker, args=(self.location,))
         # self.localization_process.start()
@@ -90,23 +95,28 @@ class AutonomousMode(IControlMode, ABC):
             ret, frame = cap.read()
             if not ret:
                 raise RuntimeError(f"Failed to read frame from {cam_name} camera.")
-
             frames[cam_name] = frame
+
+            filename = f"{self.frame_save_dir}/frame_{self.frame_counter:05d}_{cam_name}.jpg"
+            cv2.imwrite(filename, frame)
 
         try:
             print("Stitching frames...")
-            print("Does left exist?", frames.get('left') is not None)
-            print("Does front exist?", frames.get('front') is not None)
-            print("Does right exist?", frames.get('right') is not None)
             top_down = self.data.transform([frames['left'], frames['front'], frames['right']])
+            stitched_filename = f"{self.frame_save_dir}/frame_{self.frame_counter:05d}_stitched.jpg"
+            cv2.imwrite(stitched_filename, top_down)
         except Exception as e:
             raise RuntimeError(f"Stitching error: {e}")
 
         front_frame = frames['front']
         self.location.img = front_frame
         front_frame = cv2.resize(front_frame, (WIDTH, HEIGHT))
+        resized_front_filename = f"{self.frame_save_dir}/frame_{self.frame_counter:05d}_front_resized.jpg"
+        cv2.imwrite(resized_front_filename, front_frame)
 
+        self.frame_counter += 1
         return top_down, front_frame
+
 
     def adjust_steering(self, steering_angle):
         new_steering_angle = steering_angle * 576 / 90
