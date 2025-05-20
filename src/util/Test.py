@@ -1,6 +1,8 @@
 import os
 
 import cv2
+
+from src.util.video import get_camera_config
 from ..control_modes.autonomous_mode.object_detection.ObjectDetection import ObjectDetection
 from ..control_modes.autonomous_mode.object_detection.TrafficDetection import TrafficManager
 
@@ -44,9 +46,19 @@ def main(weights_path: str, input_source: str, video_path: str = None):
     cap.release()
     cv2.destroyAllWindows()
 
+def get_connected_cameras(max_devices=5):
+    conf = get_camera_config()
+    print(conf)
 
-if __name__ == "__main__":
-    print("Current working dir:", os.getcwd())
 
-    # Use v5_model.pt (model from last year) on the video (default.mp4)
-    main('assets/v5_model.pt', 'video', 'assets/default.mp4')
+if __name__ == '__main__':
+    get_connected_cameras()
+
+#
+# if __name__ == "__main__":
+#
+#
+#     print("Current working dir:", os.getcwd())
+#
+#     # Use v5_model.pt (model from last year) on the video (default.mp4)
+#     main('assets/v5_model.pt', 'video', 'assets/default.mp4')

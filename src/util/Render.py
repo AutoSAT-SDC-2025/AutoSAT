@@ -28,3 +28,6 @@ class Renderer:
             except Exception as e:
                 print(f"[Renderer] Failed to draw op {op}: {e}")
         cv2.imshow('Traffic Detection', frame)
+
+        return frame
+
