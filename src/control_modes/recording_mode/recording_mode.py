@@ -103,6 +103,7 @@ class RecordMode:
                         logging.error(f"Stitching error: {e}")
 
                 self.frame_counter += 1
+                print(f"Captured frame {self.frame_counter} for mode {mode}")
 
     def start(self):
         print("Select capture mode:")
