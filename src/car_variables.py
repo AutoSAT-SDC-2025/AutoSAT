@@ -19,7 +19,6 @@ class KartControlCanIDs(IntEnum):
     breaking = 0x110
     steering = 0x220
     throttle = 0x330
-    speed_sensor = 0x440
 
 class KartFeedbackCanIDs(IntEnum):
     steering_sensor = 0x1E5
@@ -39,3 +38,11 @@ class CarType(IntEnum):
 class ControlMode(IntEnum):
     automatic = 0
     manual = 1
+
+class CameraResolution(IntEnum):
+    WIDTH = 848
+    HEIGHT = 480
+
+class LineDetectionDims(IntEnum):
+    WIDTH = 720
+    HEIGHT = 720
