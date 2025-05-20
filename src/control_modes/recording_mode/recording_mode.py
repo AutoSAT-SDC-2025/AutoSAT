@@ -56,54 +56,49 @@ class RecordMode:
             print(f"Camera {cam_name} ready.")
 
     def capture_and_save(self, mode: str):
+        iteration_dir = os.path.join(self.base_dir, str(self.frame_counter + 1))
+        os.makedirs(iteration_dir, exist_ok=True)
+
         frames = {}
         if mode in ("1", "2", "4"):
             required_cams = ['left', 'front', 'right']
+        elif mode == "3":
+            required_cams = ['front']
+        else:
+            logging.warning("Invalid mode, defaulting to all.")
+            required_cams = ['left', 'front', 'right']
 
-            def capture_and_save(self, mode: str):
-                iteration_dir = os.path.join(self.base_dir, str(self.frame_counter + 1))
-                os.makedirs(iteration_dir, exist_ok=True)
+        for cam_name in required_cams:
+            cap = self.captures.get(cam_name)
+            if not cap:
+                logging.error(f"Camera {cam_name} not available.")
+                continue
 
-                frames = {}
-                if mode in ("1", "2", "4"):
-                    required_cams = ['left', 'front', 'right']
-                elif mode == "3":
-                    required_cams = ['front']
-                else:
-                    logging.warning("Invalid mode, defaulting to all.")
-                    required_cams = ['left', 'front', 'right']
+            ret, frame = cap.read()
+            if not ret:
+                raise RuntimeError(f"Failed to read frame from {cam_name} camera.")
+            frames[cam_name] = frame
 
-                for cam_name in required_cams:
-                    cap = self.captures.get(cam_name)
-                    if not cap:
-                        logging.error(f"Camera {cam_name} not available.")
-                        continue
+            if mode in ("1", "2", "3"):
+                path = os.path.join(iteration_dir, f"frame_{self.frame_counter:05d}_{cam_name}.jpg")
+                cv2.imwrite(path, frame)
 
-                    ret, frame = cap.read()
-                    if not ret:
-                        raise RuntimeError(f"Failed to read frame from {cam_name} camera.")
-                    frames[cam_name] = frame
+        if self.save_transforms and mode in ("1", "4") and all(k in frames for k in ['left', 'front', 'right']):
+            try:
+                print("Stitching frames...")
+                top_down = self.data.transform([frames['left'], frames['front'], frames['right']])
+                topdown_path = os.path.join(iteration_dir, f"frame_{self.frame_counter:05d}_topdown.jpg")
+                cv2.imwrite(topdown_path, top_down)
 
-                    if mode in ("1", "2", "3"):
-                        path = os.path.join(iteration_dir, f"frame_{self.frame_counter:05d}_{cam_name}.jpg")
-                        cv2.imwrite(path, frame)
+                stitched_path = os.path.join(iteration_dir, f"frame_{self.frame_counter:05d}_stitched.jpg")
+                stitched = self.data.stitch([frames['left'], frames['front'], frames['right']])
+                cv2.imwrite(stitched_path, stitched)
 
-                if self.save_transforms and mode in ("1", "4") and all(k in frames for k in ['left', 'front', 'right']):
-                    try:
-                        print("Stitching frames...")
-                        top_down = self.data.transform([frames['left'], frames['front'], frames['right']])
-                        topdown_path = os.path.join(iteration_dir, f"frame_{self.frame_counter:05d}_topdown.jpg")
-                        cv2.imwrite(topdown_path, top_down)
+            except Exception as e:
+                logging.error(f"Stitching error: {e}")
 
-                        stitched_path = os.path.join(iteration_dir, f"frame_{self.frame_counter:05d}_stitched.jpg")
-                        stitched = self.data.stitch([frames['left'], frames['front'], frames['right']])
-                        cv2.imwrite(stitched_path, stitched)
-
-                    except Exception as e:
-                        logging.error(f"Stitching error: {e}")
-
-                self.frame_counter += 1
-                print(f"Captured frame {self.frame_counter} for mode {mode}")
+        self.frame_counter += 1
+        print(f"Captured frame {self.frame_counter} for mode {mode}")
 
     def start(self):
         print("Select capture mode:")
