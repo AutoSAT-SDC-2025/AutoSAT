@@ -76,7 +76,7 @@ class RecordMode:
 
         self.frame_counter += 1
 
-    def run(self):
+    def start(self):
         logging.info("Starting record mode...")
         self.setup_cameras()
 
