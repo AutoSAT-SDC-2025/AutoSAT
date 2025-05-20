@@ -2,7 +2,7 @@ import os
 import cv2
 import logging
 import multiprocessing as mp
-
+from datetime import datetime
 from src.util.video import get_camera_config, validate_camera_config
 from src.multi_camera_calibration import CalibrationData, RenderDistance
 
@@ -18,13 +18,14 @@ LineDetectionDims = {
 class RecordMode:
     def __init__(self, save_transforms: bool = False):
         self.save_transforms = save_transforms
-        self.frame_save_dir = "capture_" + str(os.getpid())
-        os.makedirs(self.frame_save_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%-d-%-m-%Y %H:%M")
+        self.base_dir = os.path.join(".", timestamp)
+        os.makedirs(self.base_dir, exist_ok=True)
 
         self.frame_counter = 0
         self.cams = get_camera_config()
         self.captures = {}
-
         if self.save_transforms:
             self.data = CalibrationData(
                 path="assets/calibration/latest.npz",
@@ -54,35 +55,69 @@ class RecordMode:
             self.captures[cam_name] = cap
             print(f"Camera {cam_name} ready.")
 
-    def capture_and_save(self):
+    def capture_and_save(self, mode: str):
         frames = {}
-        for cam_name, cap in self.captures.items():
-            ret, frame = cap.read()
-            if not ret:
-                raise RuntimeError(f"Failed to read frame from {cam_name} camera.")
-            frames[cam_name] = frame
+        if mode in ("1", "2", "4"):
+            required_cams = ['left', 'front', 'right']
 
-            raw_path = f"{self.frame_save_dir}/frame_{self.frame_counter:05d}_{cam_name}.jpg"
-            cv2.imwrite(raw_path, frame)
+            def capture_and_save(self, mode: str):
+                iteration_dir = os.path.join(self.base_dir, str(self.frame_counter + 1))
+                os.makedirs(iteration_dir, exist_ok=True)
 
-        if self.save_transforms:
-            try:
-                print("Stitching frames...")
-                top_down = self.data.transform([frames['left'], frames['front'], frames['right']])
-                stitched_path = f"{self.frame_save_dir}/frame_{self.frame_counter:05d}_stitched.jpg"
-                cv2.imwrite(stitched_path, top_down)
-            except Exception as e:
-                logging.error(f"Stitching error: {e}")
+                frames = {}
+                if mode in ("1", "2", "4"):
+                    required_cams = ['left', 'front', 'right']
+                elif mode == "3":
+                    required_cams = ['front']
+                else:
+                    logging.warning("Invalid mode, defaulting to all.")
+                    required_cams = ['left', 'front', 'right']
 
-        self.frame_counter += 1
+                for cam_name in required_cams:
+                    cap = self.captures.get(cam_name)
+                    if not cap:
+                        logging.error(f"Camera {cam_name} not available.")
+                        continue
+
+                    ret, frame = cap.read()
+                    if not ret:
+                        raise RuntimeError(f"Failed to read frame from {cam_name} camera.")
+                    frames[cam_name] = frame
+
+                    if mode in ("1", "2", "3"):
+                        path = os.path.join(iteration_dir, f"frame_{self.frame_counter:05d}_{cam_name}.jpg")
+                        cv2.imwrite(path, frame)
+
+                if self.save_transforms and mode in ("1", "4") and all(k in frames for k in ['left', 'front', 'right']):
+                    try:
+                        print("Stitching frames...")
+                        top_down = self.data.transform([frames['left'], frames['front'], frames['right']])
+                        topdown_path = os.path.join(iteration_dir, f"frame_{self.frame_counter:05d}_topdown.jpg")
+                        cv2.imwrite(topdown_path, top_down)
+
+                        stitched_path = os.path.join(iteration_dir, f"frame_{self.frame_counter:05d}_stitched.jpg")
+                        stitched = self.data.stitch([frames['left'], frames['front'], frames['right']])
+                        cv2.imwrite(stitched_path, stitched)
+
+                    except Exception as e:
+                        logging.error(f"Stitching error: {e}")
+
+                self.frame_counter += 1
 
     def start(self):
-        logging.info("Starting record mode...")
+        print("Select capture mode:")
+        print("1 = all (left, front, right + stitched)")
+        print("2 = only 3 main cams (left, front, right)")
+        print("3 = only front camera")
+        print("4 = stitched only (requires all cameras)")
+        mode = input("Enter mode [1-4]: ").strip()
+
         self.setup_cameras()
 
         try:
+            logging.info("Starting record mode...")
             while True:
-                self.capture_and_save()
+                self.capture_and_save(mode)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
         except Exception as e:
