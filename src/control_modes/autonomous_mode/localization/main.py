@@ -58,6 +58,7 @@ while cap.isOpened():
     
     start_time = time.perf_counter()
     frame = cv.undistort(frame, K, None)
+    cv.imshow("frame", frame)
     lane = lanedetector(frame)
     lane = cv.resize(lane, (128, 64))
     localizer.update(frame, lane)
