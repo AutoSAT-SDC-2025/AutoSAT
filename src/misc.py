@@ -2,7 +2,7 @@ import logging
 from src.car_variables import CarType, HunterFeedbackCanIDs, KartFeedbackCanIDs
 from src.gamepad import Gamepad
 from src.gamepad.controller_mapping import ControllerMapping
-from src.can_interface.can_decoder import print_can_messages
+from src.can_interface.can_decoder import print_can_messages, broadcast_can_message
 
 def calculate_throttle(controller_axis_value: float, car_type: CarType) -> float | None:
     if car_type == CarType.kart:
@@ -33,8 +33,10 @@ def setup_listeners(can_controller, car_type):
     if car_type == CarType.hunter:
         for feedback_id in HunterFeedbackCanIDs:
             can_controller.add_listener(feedback_id, print_can_messages)
+            can_controller.add_listener(feedback_id, broadcast_can_message)
             logging.debug(f"Listener added for Hunter message ID: {feedback_id}")
     elif car_type == CarType.kart:
         for feedback_id in KartFeedbackCanIDs:
             can_controller.add_listener(feedback_id, print_can_messages)
+            can_controller.add_listener(feedback_id, broadcast_can_message)
             logging.debug(f"Listener added for Kart message ID: {feedback_id}")
