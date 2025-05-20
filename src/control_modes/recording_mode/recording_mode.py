@@ -20,7 +20,7 @@ class RecordMode:
         self.save_transforms = save_transforms
 
         timestamp = datetime.now().strftime("%-d-%-m-%Y %H:%M")
-        self.base_dir = os.path.join(".", timestamp)
+        self.base_dir = os.path.join("recorded", timestamp)
         os.makedirs(self.base_dir, exist_ok=True)
 
         self.frame_counter = 0
