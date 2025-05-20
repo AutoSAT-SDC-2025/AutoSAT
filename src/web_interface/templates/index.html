@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoSAT Control Panel</title>
+    <link rel="stylesheet" href="../static/styles.css">
+</head>
+<body>
+<header>
+    <h1>AutoSAT Control Panel</h1>
+    <div id="connection-status">
+        <span class="status-indicator disconnected" id="connection-indicator"></span>
+        <span id="connection-text">Connecting...</span>
+    </div>
+</header>
+
+<div class="container">
+    <div class="panels">
+        <div class="panel">
+            <h2>Camera Feed</h2>
+            <div class="camera-container">
+                <div id="camera-placeholder" class="placeholder">Connecting to camera...</div>
+                <img id="camera-feed" class="camera-feed hidden" alt="Camera Feed">
+            </div>
+            <div class="camera-controls">
+                <h3>Camera Views</h3>
+                <div class="camera-view-buttons">
+                    <button id="front-view" class="camera-btn active">Front</button>
+                    <button id="left-view" class="camera-btn">Left</button>
+                    <button id="right-view" class="camera-btn">Right</button>
+                    <button id="topdown-view" class="camera-btn">Top-Down</button>
+                    <button id="stitched-view" class="camera-btn">Stitched</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Control Panel</h2>
+            <div class="control-section">
+                <h3>Mode Selection</h3>
+                <div class="control-group">
+                    <button id="manual-mode" class="btn">Manual Mode</button>
+                    <button id="autonomous-mode" class="btn">Autonomous Mode</button>
+                </div>
+
+                <h3>Car Type</h3>
+                <div class="control-group">
+                    <button id="kart-type" class="btn">Kart</button>
+                    <button id="hunter-type" class="btn">Hunter</button>
+                </div>
+
+                <h3>Controls</h3>
+                <div class="control-group">
+                    <button id="start-btn" class="btn btn-success">Start</button>
+                    <button id="stop-btn" class="btn btn-danger">Stop</button>
+                </div>
+            </div>
+
+            <div class="status-section">
+                <h3>Current Status</h3>
+                <div class="status-info">
+                    <p><strong>Mode:</strong> <span id="current-mode">Not set</span></p>
+                    <p><strong>Car Type:</strong> <span id="current-car-type">Not set</span></p>
+                    <p><strong>Running:</strong> <span id="running-status">No</span></p>
+                </div>
+            </div>
+
+            <div id="alert" class="alert hidden"></div>
+        </div>
+    </div>
+
+    <div class="panel can-panel">
+        <div class="can-header">
+            <h2>CAN Feedback</h2>
+            <div class="can-status">
+                <span class="status-indicator disconnected" id="can-connection-indicator"></span>
+                <span id="can-connection-text">Disconnected</span>
+                <span class="can-stats">Messages received: <span id="can-message-count">0</span></span>
+            </div>
+        </div>
+
+        <div id="hunter-data" class="can-section hidden">
+            <h3>Hunter Status</h3>
+            <div class="can-data-grid">
+                <div class="can-data-card">
+                    <div class="can-data-title">Movement</div>
+                    <div class="can-data-value">Speed: <span id="hunter-speed">0.00</span> m/s</div>
+                    <div class="can-data-value">Steering: <span id="hunter-steering">0.00</span> rad</div>
+                    <div class="can-data-timestamp" id="hunter-movement-timestamp">Last update: Never</div>
+                </div>
+                <div class="can-data-card">
+                    <div class="can-data-title">Status</div>
+                    <div class="can-data-value">Body: <span id="hunter-body">Unknown</span></div>
+                    <div class="can-data-value">Control: <span id="hunter-control">Unknown</span></div>
+                    <div class="can-data-value">Brake: <span id="hunter-brake">Unknown</span></div>
+                    <div class="can-data-timestamp" id="hunter-status-timestamp">Last update: Never</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="kart-data" class="can-section hidden">
+            <h3>Kart Status</h3>
+            <div class="can-data-grid">
+                <div class="can-data-card">
+                    <div class="can-data-title">Motion</div>
+                    <div class="can-data-value">Speed: <span id="kart-speed">0.00</span> m/s</div>
+                    <div class="can-data-value">Steering: <span id="kart-steering">0</span></div>
+                    <div class="can-data-timestamp" id="kart-motion-timestamp">Last update: Never</div>
+                </div>
+                <div class="can-data-card">
+                    <div class="can-data-title">Controls</div>
+                    <div class="can-data-value">Throttle: <span id="kart-throttle">0</span></div>
+                    <div class="can-data-value">Braking: <span id="kart-braking">Not Braking</span></div>
+                    <div class="can-data-value">Gear: <span id="kart-gear">N</span></div>
+                    <div class="can-data-timestamp" id="kart-controls-timestamp">Last update: Never</div>
+                </div>
+                <div class="can-data-card">
+                    <div class="can-data-title">Breaking System</div>
+                    <div class="can-data-value">Current: <span id="kart-break-current">0</span></div>
+                    <div class="can-data-value">Target: <span id="kart-break-target">0</span></div>
+                    <div class="can-data-value">Direction: <span id="kart-break-direction">Unknown</span></div>
+                    <div class="can-data-value">Status: <span id="kart-break-status">Unknown</span></div>
+                    <div class="can-data-timestamp" id="kart-breaking-timestamp">Last update: Never</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="can-section">
+            <h3>Message Log</h3>
+            <div id="can-log" class="can-log"></div>
+        </div>
+    </div>
+
+    <div class="info-panel">
+        <div class="info-section">
+            <h3>Camera Details</h3>
+            <p>Current View: <span id="current-view">Front</span></p>
+            <p>Frame Size: <span id="frame-size">0 x 0</span></p>
+            <p>FPS: <span id="fps">0</span></p>
+        </div>
+    </div>
+</div>
+
+<footer>
+    <p>AutoSAT Control Panel</p>
+</footer>
+
+<script src="../static/app.js"></script>
+</body>
+</html>
