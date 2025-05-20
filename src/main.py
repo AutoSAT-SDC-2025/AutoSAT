@@ -3,6 +3,7 @@ import logging
 from src.car_variables import CarType
 from src.control_modes.autonomous_mode.autonomous_mode import AutonomousMode
 from src.control_modes.manual_mode.manual_mode import ManualMode
+from src.control_modes.recording_mode.recording_mode import RecordingMode
 # from src.car_variables import CarType
 # from src.control_modes.manual_mode.manual_mode import ManualMode
 # from src.control_modes.autonomous_mode.autonomous_mode import AutonomousMode
@@ -12,7 +13,7 @@ def main():
     logging.basicConfig(level=logging.INFO)
     mode = input("Which mode do you want to launch. 1 for manual, 2 for autonomous, 3 to calibrate, 4 to pray: ")
     try:
-        if mode not in ["3"] and mode not in ["4"]: # maybe more later.
+        if mode not in ["4"] and mode not in ["5"]: # maybe more later.
             car = int(input("Which car are we using: 0 for kart, 1 for hunter: "))
             if car not in [0, 1]:
                 raise ValueError("Invalid car type. Please enter 0 for kart or 1 for hunter.")
@@ -27,12 +28,15 @@ def main():
     elif mode == "2":
         auto = AutonomousMode(CarType(car))
         auto.start()
-
     elif mode == "3":
+        record = RecordingMode(CarType(car))
+        record.start()
+
+    elif mode == "4":
         calibrate_connected_cameras(save_path="assets/calibration")
     # go.main()
 
-    elif mode == "4":
+    elif mode == "5":
         transform_camera_image()
 
 if __name__ == "__main__":
