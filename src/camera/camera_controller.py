@@ -1,3 +1,4 @@
+import logging
 from typing import Dict
 from src.car_variables import CameraResolution, LineDetectionDims
 from src.multi_camera_calibration import CalibrationData, RenderDistance
@@ -24,7 +25,7 @@ class CameraController:
         self.__enable = False
 
     def setup_cameras(self):
-        for camera_type, path in self.__camera_paths:
+        for camera_type, path in self.__camera_paths.items():
             capture = cv2.VideoCapture(path)
             capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
             capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
@@ -36,19 +37,21 @@ class CameraController:
                 raise RuntimeError(f"Failed to open {camera_type} camera at {path}")
 
             self.__cameras[camera_type] = capture
-            print("Completed camera setup for ", camera_type, " at ", path)
+            logging.info(f"Completed camera setup for {camera_type} at {path}")
 
     def toggle_cameras(self):
         if not self.__enable:
             self.__enable = True
 
-    def start(self):
+    def start_cameras(self):
         if self.__enable:
             for cam_name, cap in self.__cameras.items():
                 ret, frame = cap.read()
                 if not ret:
                     raise RuntimeError(f"Failed to read frame from {cam_name} camera.")
                 self.__camera_frames[cam_name] = frame
+            return True
+        return False
 
     def get_front_view(self):
         return self.__camera_frames['front']

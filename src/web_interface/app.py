@@ -38,7 +38,7 @@ class CameraManager:
         self.frame = None
         self.clients = []
         self.frame_task = None
-        self.view_mode = "front"  # Default view: front, left, right, topdown, stitched
+        self.view_mode = "front"
         try:
             self.camera_controller = CameraController()
             self.camera_controller.toggle_cameras()
@@ -52,7 +52,6 @@ class CameraManager:
             return False
 
         try:
-            self.camera_controller.start()
             self.active = True
             self.camera_thread = threading.Thread(target=self._camera_loop)
             self.camera_thread.daemon = True
@@ -86,7 +85,8 @@ class CameraManager:
         """Thread function to continuously read frames based on view mode"""
         while self.active and self.camera_controller is not None:
             try:
-                # Get frame based on view mode
+                self.camera_controller.start_cameras()
+                
                 if self.view_mode == "front":
                     self.frame = self.camera_controller.get_front_view()
                 elif self.view_mode == "left":
@@ -97,14 +97,13 @@ class CameraManager:
                     self.frame = self.camera_controller.get_top_down_view()
                 elif self.view_mode == "stitched":
                     self.frame = self.camera_controller.get_stitched_image()
-                
-                # Resize frame if needed for web view
+
                 if self.frame is not None and (self.frame.shape[1] > WIDTH or self.frame.shape[0] > HEIGHT):
                     self.frame = cv2.resize(self.frame, (WIDTH, HEIGHT))
                 
             except Exception as e:
                 logger.error(f"Error in camera loop: {e}")
-                time.sleep(0.1)  # Wait before retrying
+                time.sleep(0.1)
 
     async def send_frame_to_clients(self):
         """Send the latest frame to all connected clients"""
@@ -135,7 +134,6 @@ class CameraManager:
         if websocket in self.clients:
             self.clients.remove(websocket)
 
-# Control mode manager
 class ControlManager:
     def __init__(self):
         self.mode = None
