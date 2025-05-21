@@ -45,7 +45,7 @@ class CameraController:
     def disable_cameras(self):
         self.__enable = False
 
-    def start_cameras(self):
+    def capture_camera_frames(self):
         if self.__enable:
             for cam_name, cap in self.__cameras.items():
                 ret, frame = cap.read()

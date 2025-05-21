@@ -85,7 +85,7 @@ class CameraManager:
         """Thread function to continuously read frames based on view mode"""
         while self.active and self.camera_controller is not None:
             try:
-                self.camera_controller.start_cameras()
+                self.camera_controller.capture_camera_frames()
                 
                 if self.view_mode == "front":
                     self.frame = self.camera_controller.get_front_view()
