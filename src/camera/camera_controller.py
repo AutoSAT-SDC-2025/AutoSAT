@@ -39,9 +39,11 @@ class CameraController:
             self.__cameras[camera_type] = capture
             logging.info(f"Completed camera setup for {camera_type} at {path}")
 
-    def toggle_cameras(self):
-        if not self.__enable:
-            self.__enable = True
+    def enable_cameras(self):
+        self.__enable = True
+
+    def disable_cameras(self):
+        self.__enable = False
 
     def start_cameras(self):
         if self.__enable:

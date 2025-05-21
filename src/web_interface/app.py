@@ -41,7 +41,7 @@ class CameraManager:
         self.view_mode = "front"
         try:
             self.camera_controller = CameraController()
-            self.camera_controller.toggle_cameras()
+            self.camera_controller.enable_cameras()
             self.camera_controller.setup_cameras()
         except Exception as e:
             logger.error(f"Error initializing camera controller: {e}")
@@ -67,7 +67,7 @@ class CameraManager:
     def stop(self):
         self.active = False
         if self.camera_controller:
-            self.camera_controller.toggle_cameras()
+            self.camera_controller.disable_cameras()
             self.camera_controller = None
             self.frame = None
             logger.info("CameraController stopped")
