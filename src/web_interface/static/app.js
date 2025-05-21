@@ -52,13 +52,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const stitchedViewBtn = document.getElementById('stitched-view');
     const currentView = document.getElementById('current-view');
 
+
+    const loggerToggle = document.getElementById('logger-toggle');
+    const loggerStatus = document.getElementById('logger-status');
+    const loggerInfo = document.getElementById('logger-info');
+    const logPath = document.getElementById('log-path');
+
     const state = {
         mode: null,
         carType: null,
         running: false,
         cameraConnected: false,
         canConnected: false,
-        messageCount: 0
+        messageCount: 0,
+        loggerEnabled: false,
+        loggerAvailable: false,
+        loggerPath: null
     };
 
     let cameraSocket = null;
@@ -435,13 +444,64 @@ document.addEventListener('DOMContentLoaded', () => {
     async function getStatus() {
         const response = await apiRequest('status');
         if (response && response.success) {
-
             state.mode = response.status.mode;
             state.carType = response.status.car_type;
             state.running = response.status.running;
 
+            const loggerResponse = await apiRequest('logger/status');
+            if (loggerResponse && loggerResponse.success) {
+                state.loggerAvailable = true;
+                state.loggerEnabled = loggerResponse.status.enabled;
+                state.loggerPath = loggerResponse.status.log_dir;
+                updateLoggerUI();
+            } else {
+                state.loggerAvailable = false;
+                updateLoggerUI();
+            }
+
             updateButtonStates();
         }
+    }
+
+    function updateLoggerUI() {
+        if (!state.loggerAvailable) {
+            loggerToggle.disabled = true;
+            loggerStatus.textContent = 'Not Available';
+            loggerInfo.classList.add('hidden');
+            return;
+        }
+
+        loggerToggle.disabled = false;
+        loggerToggle.checked = state.loggerEnabled;
+        loggerStatus.textContent = state.loggerEnabled ? 'On' : 'Off';
+        
+        if (state.loggerEnabled && state.loggerPath) {
+            loggerInfo.classList.remove('hidden');
+            logPath.textContent = state.loggerPath;
+        } else {
+            loggerInfo.classList.add('hidden');
+        }
+    }
+
+    async function toggleLogger() {
+        const enabled = loggerToggle.checked;
+        const endpoint = enabled ? 'logger/start' : 'logger/stop';
+        
+        loggerToggle.disabled = true;
+        loggerStatus.textContent = 'Updating...';
+        
+        const response = await apiRequest(endpoint);
+        
+        if (response && response.success) {
+            state.loggerEnabled = response.status.enabled;
+            state.loggerPath = response.status.log_dir;
+            showAlert(response.message, true);
+        } else {
+            loggerToggle.checked = state.loggerEnabled;
+            showAlert(`Logger operation failed: ${response ? response.message : 'Unknown error'}`, false);
+        }
+        
+        updateLoggerUI();
     }
 
     manualModeBtn.addEventListener('click', async () => {
@@ -527,6 +587,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 cameraSocket.send(`view:${view}`);
             }
         });
+    });
+
+    loggerToggle.addEventListener('change', async () => {
+        await toggleLogger();  // This function already exists but wasn't being called
     });
 
     function updateCameraViewButtons(activeView) {

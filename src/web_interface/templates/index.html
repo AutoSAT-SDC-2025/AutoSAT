@@ -50,6 +50,21 @@
                     <button id="hunter-type" class="btn">Hunter</button>
                 </div>
 
+                <h3>Data Logger</h3>
+                <div class="control-group">
+                    <div class="toggle-container">
+                        <span>Data Logger:</span>
+                        <label class="switch">
+                            <input type="checkbox" id="logger-toggle">
+                            <span class="slider round"></span>
+                        </label>
+                        <span id="logger-status">Off</span>
+                    </div>
+                    <div id="logger-info" class="hidden">
+                        <p>Logging to: <span id="log-path">Not started</span></p>
+                    </div>
+                </div>
+
                 <h3>Controls</h3>
                 <div class="control-group">
                     <button id="start-btn" class="btn btn-success">Start</button>

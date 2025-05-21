@@ -24,11 +24,9 @@ from src.control_modes.autonomous_mode.autonomous_mode import AutonomousMode
 from src.camera.camera_controller import CameraController
 from src.misc import setup_listeners
 
-from .websocket_manager import can_ws_manager
+from src.data_logger.logger_manager import DataLoggerManager
 
-# Default camera dimensions
-WIDTH = CameraResolution.WIDTH
-HEIGHT = CameraResolution.HEIGHT
+from .websocket_manager import can_ws_manager
 
 class CameraManager:
     def __init__(self):
@@ -67,11 +65,13 @@ class CameraManager:
     def stop(self):
         self.active = False
         if self.camera_controller:
-            self.camera_controller.disable_cameras()
-            self.camera_controller = None
-            self.frame = None
-            logger.info("CameraController stopped")
-            return True
+            try:
+                self.camera_controller.disable_cameras()
+                self.frame = None
+                logger.info("CameraController stopped")
+                return True
+            except Exception as e:
+                logger.error(f"Error stopping camera controller: {e}")
         return False
 
     def set_view_mode(self, mode):
@@ -98,8 +98,8 @@ class CameraManager:
                 elif self.view_mode == "stitched":
                     self.frame = self.camera_controller.get_stitched_image()
 
-                if self.frame is not None and (self.frame.shape[1] > WIDTH or self.frame.shape[0] > HEIGHT):
-                    self.frame = cv2.resize(self.frame, (WIDTH, HEIGHT))
+                if self.frame is not None and (self.frame.shape[1] > CameraResolution.WIDTH or self.frame.shape[0] > CameraResolution.HEIGHT):
+                    self.frame = cv2.resize(self.frame, (CameraResolution.WIDTH, CameraResolution.HEIGHT))
                 
             except Exception as e:
                 logger.error(f"Error in camera loop: {e}")
@@ -235,7 +235,9 @@ class ControlManager:
         }
 
 camera_manager = CameraManager()
+camera_manager.start()
 control_manager = ControlManager()
+data_logger_manager = DataLoggerManager(camera_manager.camera_controller)
 
 @asynccontextmanager
 async def lifespan(app_instance: FastAPI):
@@ -355,6 +357,19 @@ async def websocket_camera_endpoint(websocket: WebSocket):
 
     camera_manager.add_client(websocket)
 
+    if camera_manager.frame is not None:
+        try:
+            _, buffer = cv2.imencode('.jpg', camera_manager.frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+            frame_base64 = base64.b64encode(buffer).decode('utf-8')
+            
+            await websocket.send_json({
+                "type": "frame",
+                "data": frame_base64,
+                "view_mode": camera_manager.view_mode
+            })
+        except Exception as e:
+            logger.error(f"Error sending initial frame: {e}")
+
     try:
         while True:
             data = await websocket.receive_text()
@@ -389,3 +404,73 @@ async def websocket_can_endpoint(websocket: WebSocket):
     except Exception as e:
         logger.error(f"Error in CAN WebSocket: {e}")
         can_ws_manager.remove_client(websocket)
+
+@app.post("/api/logger/start")
+async def start_logger():
+    if not data_logger_manager:
+        logger.error("Data logger manager not initialized")
+        return JSONResponse({
+            "success": False,
+            "message": "Data logger not available",
+            "status": {"enabled": False, "log_dir": None}
+        })
+
+    try:
+        logger.info("Attempting to start data logger...")
+        data_logger_manager.enable_logger()
+        logger.info(f"Data logger started successfully. Log dir: {data_logger_manager.log_dir}")
+        return JSONResponse({
+            "success": True,
+            "message": "Data logger started",
+            "status": {"enabled": True, "log_dir": data_logger_manager.log_dir}
+        })
+    except Exception as e:
+        logger.error(f"Error starting data logger: {e}")
+        return JSONResponse({
+            "success": False,
+            "message": f"Error starting data logger: {e}",
+            "status": {"enabled": False, "log_dir": None}
+        })
+
+
+@app.post("/api/logger/stop")
+async def stop_logger():
+    if not data_logger_manager:
+        return JSONResponse({
+            "success": False,
+            "message": "Data logger not available",
+            "status": {"enabled": False, "log_dir": None}
+        })
+
+    try:
+        data_logger_manager.disable_logger()
+        return JSONResponse({
+            "success": True,
+            "message": "Data logger stopped",
+            "status": {"enabled": False, "log_dir": None}
+        })
+    except Exception as e:
+        logger.error(f"Error stopping data logger: {e}")
+        return JSONResponse({
+            "success": False,
+            "message": f"Error stopping data logger: {e}",
+            "status": {"enabled": data_logger_manager.enabled, "log_dir": data_logger_manager.log_dir}
+        })
+
+
+@app.api_route("/api/logger/status", methods=["GET", "POST"])
+async def get_logger_status():
+    if not data_logger_manager:
+        return JSONResponse({
+            "success": False,
+            "message": "Data logger not available",
+            "status": {"enabled": False, "log_dir": None}
+        })
+
+    return JSONResponse({
+        "success": True,
+        "status": {
+            "enabled": data_logger_manager.enabled,
+            "log_dir": data_logger_manager.log_dir
+        }
+    })
