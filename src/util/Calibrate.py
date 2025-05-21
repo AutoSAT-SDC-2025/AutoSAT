@@ -53,7 +53,6 @@ def calibrate_connected_cameras(save_path="./calibration"):
 
     pattern = CalibrationPattern(10, 7, 0.115, 0.085, cv2.aruco.DICT_4X4_100)
 
-
     calibrator = Calibrator(captured_images, pattern)
     calibrator.calibrate()
     calibrator.save(save_path, keep_history=False, overwrite=True)
