@@ -52,8 +52,6 @@ class CameraController:
                 if not ret:
                     raise RuntimeError(f"Failed to read frame from {cam_name} camera.")
                 self.__camera_frames[cam_name] = frame
-            return True
-        return False
 
     def get_front_view(self):
         return self.__camera_frames['front']
