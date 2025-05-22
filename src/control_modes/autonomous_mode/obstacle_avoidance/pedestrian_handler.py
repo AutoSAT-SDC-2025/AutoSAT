@@ -1,12 +1,12 @@
 from rplidar import RPLidar
 import cv2
-import torch
 import math
 import numpy as np
 from ..object_detection.Detection import ObjectDetection
 from ....can_interface.bus_connection import connect_to_can_interface, disconnect_from_can_interface
 from ....can_interface.can_factory import select_can_controller_creator, create_can_controller
 from src.util.video import get_camera_config
+from .CameraClassification import ScanMerging
 
 class PedestrianHandler:
     def __init__(self, weights_path, input_source):
@@ -17,11 +17,13 @@ class PedestrianHandler:
         self.can_creator = select_can_controller_creator(self.car_type)
         self.can_controller = create_can_controller(self.can_creator, self.can_bus)
         self.cams = get_camera_config()
-        self.lidar = RPLidar("Com3")
-        self.object_detection = ObjectDetection(weights_path, input_source)
+        try:
+            self.lidar = RPLidar("Com3")
+        except:
+            self.lidar = RPLidar("/dev/ttyUSB0")
+        self.scan_merging = ScanMerging(weights_path, input_source)
         self.cam = cv2.VideoCapture(1)
-        self.model = torch.hub.load('ultralytics/yolov5', 'custom', path="assets/v5_model.pt", force_reload=True)
-        self.car_distance_threshold = 2
+        self.person_distance_threshold = 2
         self.previous_detection = {}
         self.focal_length = 540
         self.image_height = 1080
@@ -36,7 +38,7 @@ class PedestrianHandler:
             ret, frame = self.cam.read()
             if not ret:
                 break
-            detections = self.object_detection.detect_objects(frame)
+            detections = self.scan_merging.get_frame_with_detections()
             return detections
 
     def get_initial_position(self, detections):
@@ -93,87 +95,15 @@ class PedestrianHandler:
             return True
         return False
 
-    def iter_scans(self):
-        lidar_scan = []
-        try:
-            for new_scan, _, angle, distance in self.lidar.iter_measures():
-                if new_scan:
-                    if len(lidar_scan) > 5:
-                        yield lidar_scan
-                    lidar_scan = []
-
-                lidar_scan.append((angle, distance))
-
-        except KeyboardInterrupt:
-            print("Stopping Lidar")
-        finally:
-            self.lidar.stop()
-            self.lidar.disconnect()
-
-    def coordinate_conversion(self, angle, distance):
-        radians = math.radians(angle)
-        x = (distance / 1000.0) * math.cos(radians)
-        y = (distance / 1000.0) * math.sin(radians)
-        return x, y
-
-    def homogeneous_coordinates(self, x, y):
-        k = np.array([
-            [self.focal_length, 0, self.image_width / 2],
-            [0, self.focal_length, self.image_height / 2],
-            [0, 0, 1]
-        ])
-
-        t = np.array([[0], [0.3], [0.5]])
-        R = np.array([[0, -1, 0], [-1, 0, 0], [0, 0, 1]])
-
-        extrinsics = np.hstack((R, t))
-
-        homogeneous_point = np.array([x, y, 0, 1])
-        projection_matrix = np.dot(k, extrinsics)
-        projected_2d_homogeneous = np.dot(projection_matrix, homogeneous_point)
-
-        u = projected_2d_homogeneous[0] / projected_2d_homogeneous[2]
-        v = projected_2d_homogeneous[1] / projected_2d_homogeneous[2]
-        return u, v
-
-    def determine_distance(self, detections, scan):
-        object_distances = []
-
-        for det in detections:
-            x1, y1, x2, y2 = det["bbox"]
-            distances = []
-
-            if det["class"] != "Person":
-                continue
-
-            for angle, distance in scan:
-                if distance < 100:
-                    continue
-                x, y = self.coordinate_conversion(angle, distance)
-                u, v = self.homogeneous_coordinates(x, y)
-
-                if x1 <= u <= x2 and y1 <= v <= y2:
-                    distances.append(distance / 1000.0)
-
-            if distances:
-                object_distances.append({
-                    "box": (x1, y1, x2, y2),
-                    "distance": np.mean(distances),
-                    "class": "Person"
-                })
-
-        return object_distances
-
-    def stop_car(self, object_distances):
-        for obj in object_distances:
-            if obj["distance"] < self.car_distance_threshold and obj["class"] == "Person":
-                ped_stop_stopping = self.can_controller.set_steering_and_throttle(0, 0)
-                ped_stop_parking = self.can_controller.set_parking_mode(1)
-                return ped_stop_stopping, ped_stop_parking
-            else:
-                ped_stopping_non_parking = self.can_controller.set_parking_mode(0)
-                ped_stopping_driving = self.can_controller.set_steering_and_throttle(0, 300)
-                return ped_stopping_driving, ped_stopping_non_parking
+    def stop_car(self, object_detections):
+        for obj in object_detections:
+            if obj["class"] == "Person" and 0 < obj["distance"] < self.person_distance_threshold:
+                self.can_controller.set_steering_and_throttle(0, 0)
+                self.can_controller.set_parking_mode(1)
+                return "Stopped for pedestrian"
+        self.can_controller.set_parking_mode(0)
+        self.can_controller.set_steering_and_throttle(0, 300)
+        return "Continuing to drive"
 
     def continue_driving(self):
         if self.pedestrian_crossed():
@@ -181,22 +111,14 @@ class PedestrianHandler:
             ped_driving_mode = self.can_controller.set_steering_and_throttle(0, 300)
             return ped_driving_mode, ped_parking_mode
 
-def main():
-    weights_path = "assets/v5_model.pt"
-    input_source = "video"
-    handler = PedestrianHandler(weights_path, input_source)
+    def main(self):
+        weights_path = "assets/v5_model.pt"
+        input_source = "video"
+        handler = PedestrianHandler(weights_path, input_source)
+        initial_position_set = False
 
-    initial_position_set = False
-
-    try:
-        for scan in handler.iter_scans():
-            ret, frame = handler.cam.read()
-            if not ret:
-                print("Failed to read from camera.")
-                break
-
-            detections = handler.object_detection.detect_objects(frame)
-
+        while True:
+            detections = handler.detect_objects()
             if not detections:
                 continue
 
@@ -204,23 +126,15 @@ def main():
                 handler.get_initial_position(detections)
                 initial_position_set = True
 
-            handler.get_current_pos(detections)
             handler.get_direction(detections)
+            handler.get_current_pos(detections)
 
-            object_distances = handler.determine_distance(detections, scan)
+            status = handler.stop_car(detections)
+            print(status)
 
-            handler.stop_car(object_distances)
-            handler.continue_driving()
+            if handler.pedestrian_crossed():
+                drive_status = handler.continue_driving()
+                print("Pedestrian crossed. Continuing to drive:", drive_status)
 
-    except KeyboardInterrupt:
-        print("Interrupted by user. Stopping.")
-    finally:
-        handler.lidar.stop()
-        handler.lidar.disconnect()
-        handler.cam.release()
-        disconnect_from_can_interface(handler.can_bus)
-        cv2.destroyAllWindows()
-
-if __name__ == "__main__":
-    main()
-
+    if __name__ == "__main__":
+        main()

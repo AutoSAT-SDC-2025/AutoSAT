@@ -1,74 +1,37 @@
-from .lidar_scan import LidarScans
-from ..object_detection.Detection import ObjectDetection
-from .rrttestright import RRTStar, Node
-#from .....src.misc import calculate_steering, calculate_throttle
+from .RRT import RRTStar
+from ....can_interface.bus_connection import connect_to_can_interface
+from ....can_interface.can_factory import select_can_controller_creator, create_can_controller
+from src.util.video import get_camera_config
+from ..localization.localization import Localizer
+from .CameraClassification import ScanMerging
 
 from rplidar import RPLidar
 import cv2
 import math
-import torch
-import numpy as np
+import matplotlib.pyplot as plt
 
 class VehicleHandler:
-    def __init__(self, weights_path, input_source):
-        self.object_detection = ObjectDetection(weights_path, input_source)
-        self.model = torch.hub.load('ultralytics/yolov5', 'custom', path="v5_model.pt", force_reload=True)
-        self.cam = cv2.VideoCapture("assets/Car.mp4")
+    def __init__(self, weights_path, input_source, localizer):
+        self.localizer = localizer
+        self.captures = None
+        self.car_type = "Hunter"
+        self.can_bus = connect_to_can_interface(0)
+
+        self.can_creator = select_can_controller_creator(self.car_type)
+        self.can_controller = create_can_controller(self.can_creator, self.can_bus)
+        self.cams = get_camera_config()
+        self.scan_merging = ScanMerging(weights_path, input_source)
+        self.cam = cv2.VideoCapture(1)
         self.lidar = RPLidar("COM3")
-        self.waypoints = []
-        self.initial_position = Node(0, 0)
-        self.starting_position = Node(2, 0)
-        self.lidar_scans = LidarScans()
         self.image_width = 1920
         self.image_height = 1080
         self.focal_length = 540
         self.car_detected = False
         self.collision = False
+        self.goal_set = False
+        self.path_found = False
 
-    def iter_scans(self):
-        lidar_scan = []
-        try:
-            for new_scan, _, angle, distance in self.lidar.iter_measures():
-                if new_scan:
-                    if len(lidar_scan) > 5:
-                        yield lidar_scan
-                    lidar_scan = []
-
-                lidar_scan.append((angle, distance))
-
-        except KeyboardInterrupt:
-            print("Stopping Lidar")
-        finally:
-            self.lidar.stop()
-            self.lidar.disconnect()
-
-    def coordinate_conversion(self, angle, distance):
-        radians = math.radians(angle)
-        x = (distance / 1000) * math.cos(radians)
-        y = (distance / 1000) * math.sin(radians)
-        return x, y
-
-    def homogeneous_coordinates(self, x, y):
-        k = np.array([
-            [self.focal_length, 0, self.image_width / 2],
-            [0, self.focal_length, self.image_height / 2],
-            [0, 0, 1]
-        ])
-
-        t = np.array([[0], [0.3], [0.5]])
-        R = np.array([[0, -1, 0], [-1, 0, 0], [0, 0, 1]])
-
-        extrinsics = np.hstack((R, t))
-
-        homogeneous_point = np.array([x, y, 0, 1])
-        projection_matrix = np.dot(k, extrinsics)
-        projected_2d_homogeneous = np.dot(projection_matrix, homogeneous_point)
-
-        u = projected_2d_homogeneous[0] / projected_2d_homogeneous[2]
-        v = projected_2d_homogeneous[1] / projected_2d_homogeneous[2]
-        return u, v
-
-    def check_collision(self, u, v, scan):
+    """def check_collision(self, u, v, scan):
         min_angle = 160
         max_angle = 200
         for angle, distance in scan:
@@ -81,144 +44,195 @@ class VehicleHandler:
                     if 0 <= u_temp < self.image_width and 0 <= v_temp < self.image_height:
                         if 0 <= u - u_temp < 10 and 0 <= v - v_temp < 10:
                             self.collision = True
-                            return self.collision
+                            return self.collision"""
 
-    def merge_measurements(self, detections, scan):
-        object_distances = []
 
-        for det in detections:
-            x1, y1, x2, y2, conf, class_id = det[:6]
-            distances = []
-            class_name = self.model.names[int(class_id)]
+    def set_rrt(self, goal, detections):
+        if self.path_found is False:
+            start = [self.localizer.x, self.localizer.y]
+            map_size = [20, 20]
 
-            if class_name != "Car":
-                continue
+            x = self.localizer.x
+            y = self.localizer.y
+            obstacles = self.set_obstacles(detections, x, y)
 
-            for angle, distance in scan:
-                if distance < 100:
-                    continue
-                x, y = self.coordinate_conversion(angle, distance)
-                u, v = self.homogeneous_coordinates(x, y)
+            rrt_star = RRTStar(start=start, goal=goal, num_obstacles=0, map_size=map_size, obstacles=obstacles)
+            path = rrt_star.search()
 
-                if x1 <= u <= x2 and y1 <= v <= y2:
-                    distances.append(distance / 1000.0)
+            if path:
+                smoothed_path = rrt_star.smooth_path(path, iterations=200)
+                path = smoothed_path
+                rrt_star.path = path  # in case draw_path() relies on internal path
+                rrt_star.draw_path()
 
-            if distances:
-                object_distances.append({
-                    "box": (x1, y1, x2, y2),
-                    "distance": np.mean(distances),
-                    "class": class_name
-                })
+                self.path_found = True
+                print("RRT* path found:")
+                for point in path:
+                    print(point)
 
-        return object_distances
+                x_vals = [node.x for node in path]
+                y_vals = [node.y for node in path]
 
-    def initialize_rrt(self, object_distances, goal):
-        for obj in object_distances:
-            if obj["class"] == "Car" and obj["distance"] < 5:
-                self.car_detected = True
-                start = self.starting_position
-                rrt = RRTStar(start, goal, num_obstacles=1, map_size=[10,20])
-                path = rrt.search()
-                self.set_waypoints(path)
-                return path
+                return x_vals, y_vals
 
-    def set_goal(self, object_distances):
-        for obj in object_distances:
-            if obj["distance"] < 3.0 and self.car_detected == True:
-                    print("Nearby car detected")
-                    distance_offset = 5.0
-                    x_goal = obj["distance"] + distance_offset
-                    y_goal = 0
-                    goal = Node(x_goal, y_goal)
-                    return goal
+            else:
+                print("RRT* failed to find a path.")
 
-        print("No nearby car detected")
-        return None
-
-    def set_waypoints(self, waypoints):
-        if waypoints:
-            self.waypoints = waypoints
-            print("Waypoints have been set:")
-            for wp in waypoints:
-                print(f"  -> x={wp[0]:.2f}, y={wp[1]:.2f}")
+    def set_goal(self, det, x, y, theta):
+        if det["class"] == "Car" and self.goal_set is False:
+            distance_offset = 8.0
+            x_goal = x
+            y_goal = det["distance"] + distance_offset + y
+            theta = theta
+            goal = (x_goal, y_goal, theta)
+            print(f"Goal set to: {goal} at distance {det['distance']:.2f}m")
+            return goal
+        elif det["class"] == "Car" and self.goal_set is True:
+            print("Goal is already set.")
         else:
-            print("No path found. Waypoints not set.")
-
-    def steer_to_waypoint(self, current_pos):
-        if not self.waypoints:
-            print("No waypoints left.")
+            print("No suitable car detected to set goal.")
             return None
 
-        wp = self.waypoints[0]
-        dx = wp[0] - current_pos.x
-        dy = wp[1] - current_pos.y
+    def set_obstacles(self, detections, x, y):
+        obstacles = []
+        for det in detections:
+            if det["class"] == "Car":
+                ox = -1.25 + x
+                oy = det["distance"] + y
+                width = 2.5
+                height = 4
+                obstacles.append((ox, oy, width, height))
+        return obstacles
 
-        if math.hypot(dx, dy) < 0.5:
-            self.waypoints.pop(0)
-            print("Waypoint reached, moving to next.")
-            return self.steer_to_waypoint(current_pos)
+    def angle_to_waypoint(self, x, y, path):
+        for point in path:
+            dx = point[0] - x
+            dy = point[1] - y
 
-        angle = math.atan2(dy, dx)
-        print(f"Steering angle to next waypoint: {math.degrees(angle):.2f}°")
-        return angle
+            angle = math.atan2(dy, dx)
+            print(f"Steering angle to next waypoint: {math.degrees(angle):.2f}°")
+            if angle == 0:
+                print("No steering angle required")
+            return angle
+
+    def waypoint_reached(self, x_wp, y_wp, threshold=0.1):
+        current_x, current_y = self.localizer.x, self.localizer.y
+        dx = x_wp - current_x
+        dy = y_wp - current_y
+        if math.hypot(dx, dy) < threshold:
+            return True
+
+    def goal_reached(self, threshold=0.1):
+        if not self.goal:
+            return False
+        goal_x, goal_y, goal_theta = self.goal
+        return self.waypoint_reached(goal_x, goal_y, threshold)
 
     def set_steering(self, angle):
         if angle < 0:
             print("Steering left")
-
+            self.can_controller.set_steering_and_throttle(-100, 300)
         elif angle > 0:
             print("Steering right")
-
+            self.can_controller.set_steering_and_throttle(100, 300)
         else:
             print("No steering required")
+            self.can_controller.set_steering_and_throttle(0, 300)
 
-if __name__ == "__main__":
-    vehicle = VehicleHandler(weights_path="assets/v5_model.pt", input_source="assets/Car.mp4")
+    def plot_waypoints(self, goal, detections, x_vals, y_vals):
+        x = self.localizer.x
+        y = self.localizer.y
+        obstacles = self.set_obstacles(detections, x, y)
+        plt.figure(figsize=(8, 8))
+        plt.plot(x_vals, y_vals, marker='o', color='blue', label='RRT* Path')
+        plt.scatter([x_vals[0]], [y_vals[0]], color='green', label='Start')
+        plt.scatter([goal[0]], [goal[1]], color='red', label='Goal')
 
-    while True:
-        ret, frame = vehicle.cam.read()
-        if not ret:
-            break
+        # Plot obstacles (optional, if you want to visualize them)
+        for ox, oy, width, height in obstacles:
+            rect = plt.Rectangle((ox, oy), width, height, color='gray', alpha=0.5)
+            plt.gca().add_patch(rect)
 
-        detections = vehicle.object_detection.detect(frame)
+        plt.xlim(-5, 5)
+        plt.ylim(0, 15)
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.title('RRT* Path Planning')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
 
-        # Simulate LIDAR scan
-        scan = []
-        for angle in range(160, 200):  # Simulated narrow FOV
-            scan.append((angle, random.uniform(100, 1000)))  # Distance in mm
+    def main(self):
+        while self.cam.isOpened():
+            ret, frame = self.cam.read()
+            if not ret:
+                break
 
-        # Merge detections and LIDAR
-        object_distances = vehicle.merge_measurements(detections, scan)
+            frame, detections = self.scan_merging.get_frame_with_detections()
 
-        # Set goal if nearby car is detected
-        goal = vehicle.set_goal(object_distances)
+            x = self.localizer.x
+            y = self.localizer.y
+            theta = self.localizer.theta
 
-        if goal:
-            # Plan path using RRT*
-            path = vehicle.initialize_rrt(object_distances, goal)
+            for det in detections:
+                x1, y1, x2, y2 = det['bbox']
+                label = f"{det['class']} ({det['distance']:.2f}m)"
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.putText(frame, label, (x1, y1 - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-            # Draw path on frame
-            if path:
-                for i in range(len(path) - 1):
-                    x1, y1 = path[i]
-                    x2, y2 = path[i + 1]
+                if det["class"] == "Car" and det["distance"] <= 5 and self.goal_set is False:
+                    self.goal = self.set_goal(det, x, y, theta)  # Pass x, y to set_goal
+                    self.goal_set = True
+                    if self.goal:
+                        result = self.set_rrt(self.goal, detections)
+                        if result:
+                            self.x_vals, self.y_vals = result
+                            self.detections = detections
 
-                    u1, v1 = vehicle.homogeneous_coordinates(x1, y1)
-                    u2, v2 = vehicle.homogeneous_coordinates(x2, y2)
+            cv2.imshow('Detection', frame)
 
-                    cv2.line(frame, (int(u1), int(v1)), (int(u2), int(v2)), (0, 255, 0), 2)
+            if self.goal_set and self.path_found:
+                if self.x_vals and self.y_vals:
+                    x_wp, y_wp = self.x_vals[0], self.y_vals[0]
+                    if self.waypoint_reached(x_wp, y_wp):
+                        print("Waypoint reached.")
+                        self.x_vals.pop(0)
+                        self.y_vals.pop(0)
+                        continue
+                    elif len(self.x_vals) > 0:
+                        angle = self.angle_to_waypoint(self.localizer.x, self.localizer.y, [(x_wp, y_wp)])
+                        self.set_steering(angle)
 
-        # Show detections on frame
-        for det in detections:
-            x1, y1, x2, y2, conf, class_id = det[:6]
-            class_name = vehicle.model.names[int(class_id)]
-            if class_name == "Car":
-                cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 2)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+            if self.goal_set and self.path_found and not self.x_vals:
+                if self.goal_reached():
+                    print("Final goal reached!")
+                    break
 
-        cv2.imshow("RRT* Navigation", frame)
-        if cv2.waitKey(25) & 0xFF == ord('q'):
-            break
+        self.cam.release()
+        cv2.destroyAllWindows()
 
-    vehicle.cam.release()
-    cv2.destroyAllWindows()
+        if self.goal_set and self.path_found and self.x_vals and self.y_vals:
+            x_wp, y_wp = self.x_vals[0], self.y_vals[0]
 
+            if self.waypoint_reached(x_wp, y_wp):
+                print("Waypoint reached.")
+                self.x_vals.pop(0)
+                self.y_vals.pop(0)
+
+            if self.x_vals:
+                angle = self.angle_to_waypoint(self.localizer.x, self.localizer.y, [(x_wp, y_wp)])
+                self.set_steering(angle)
+            elif self.goal_reached():
+                print("Final goal reached!")
+                self.set_steering(0)
+
+if __name__ == '__main__':
+    weights_path = "assets/v5_model.pt"
+    input_source = "video"
+
+    localizer = Localizer()
+    vehicle_handler = VehicleHandler(weights_path, input_source, localizer)
+    vehicle_handler.main()

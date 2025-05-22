@@ -43,7 +43,7 @@ class RRTSim:
                         result = self.set_rrt(self.goal, detections)
                         if result:
                             self.x_vals, self.y_vals = result
-                            self.detections = detections  # Store detections for plotting
+                            self.detections = detections
 
             cv2.imshow('Detection', frame)
 

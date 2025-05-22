@@ -6,6 +6,9 @@ from src.multi_camera_calibration import CalibrationData, RenderDistance
 from .line_detection.LineDetection import LineFollowingNavigation
 from .object_detection.ObjectDetection import ObjectDetection
 from .avoidance.Avoidance import Avoidance
+from .obstacle_avoidance.pedestrian_handler import PedestrianHandler
+from .obstacle_avoidance.vehicle_handler import VehicleHandler
+from .obstacle_avoidance.CameraClassification import ScanMerging
 from ...car_variables import CarType, HunterControlMode, KartGearBox
 from ...control_modes.IControlMode import IControlMode
 from ...control_modes.autonomous_mode.object_detection.TrafficDetection import TrafficManager
@@ -59,7 +62,6 @@ class AutonomousMode(IControlMode, ABC):
         self.nav = LineFollowingNavigation(width=LineDetectionDims['width'], height=LineDetectionDims['height'])
         self.object_detector = ObjectDetection(weights_path='assets/v5_model.pt', input_source='video')
         self.traffic_manager = TrafficManager()
-
         self.renderer = Renderer()
 
         localization_manager = mp.Manager()
@@ -68,6 +70,9 @@ class AutonomousMode(IControlMode, ABC):
         self.location.y = 0
         self.location.theta = 0
         self.location.img = None
+        self.vehicle_handler = VehicleHandler(weights_path='assets/v5_model.pt', input_source='video', localizer=self.location)
+        self.pedestrian_handler = PedestrianHandler(weights_path='assets/v5_model.pt', input_source='video')
+        self.scan_merging = ScanMerging(weights_path='assets/v5_model.pt', input_source='video')
         # self.localization_process = mp.Process(target=localization.localization_worker, args=(self.location,))
         # self.localization_process.start()
 
@@ -169,7 +174,8 @@ class AutonomousMode(IControlMode, ABC):
 
                 saw_red_light = traffic_state['red_light']
                 speed_limit = traffic_state['speed_limit']
-
+                saw_person = traffic_state['person']
+                saw_car = traffic_state['car']
                 # avoidance_steering, speed_scale, avoidance_drawings = self.car_avoidance.process(stitched_frame, detections)
                 # self.renderer.add_drawings(avoidance_drawings)
 
@@ -183,6 +189,15 @@ class AutonomousMode(IControlMode, ABC):
                     logging.info("Saw red light, stopping.")
                     self.can_controller.set_steering_and_throttle(0, 0)
                     self.can_controller.set_parking_mode(1)
+                elif saw_car:
+                    logging.info("Saw car, initializing overtake")
+                    self.vehicle_handler.main()
+                elif saw_person:
+                    logging.info("Saw person, stopping.")
+                    self.pedestrian_handler.main()
+                    if self.pedestrian_handler.pedestrian_crossed():
+                        logging.info("Pedestrian has crossed the road. Resuming driving")
+                        self.pedestrian_handler.continue_driving()
                 else:
                     logging.info(f"Speed: {speed}, Steering: {steering_angle}")
                     logging.info(f"X: {self.location.x} Y: {self.location.y} THETA: {self.location.theta}")

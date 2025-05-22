@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 class ScanMerging:
     def __init__(self, weights_path, input_source):
         self.object_detection = ObjectDetection(weights_path, input_source)
-        self.cam = cv2.VideoCapture(0)
+        self.cam = cv2.VideoCapture(1)
         self.model = torch.hub.load('ultralytics/yolov5', 'custom', path="assets/yolov5s.pt", force_reload=True)
         self.lidar = RPLidar("COM3")
         self.image_width = 848
@@ -31,28 +31,11 @@ class ScanMerging:
         self.lidar_thread.daemon = True
         self.lidar_thread.start()
 
-    """def iter_scans(self):
-        lidar_scan = []
-        try:
-            for new_scan, _, angle, distance in self.lidar.iter_measures():
-                if new_scan:
-                    if len(lidar_scan) > 5:
-                        yield lidar_scan
-                    lidar_scan = []
-
-                lidar_scan.append((angle, distance))
-
-        except KeyboardInterrupt:
-            print("Stopping Lidar")
-        finally:
-            self.lidar.stop()
-            self.lidar.disconnect()"""
-
     def scan_loop(self):
         scan = []
         try:
             for _, quality, angle, distance in self.lidar.iter_measures():
-                if distance == 0 or distance > 4000:
+                if distance == 0 or distance < 300:
                     continue
                 scan.append((angle, distance))
                 if len(scan) >= 360:
@@ -74,23 +57,37 @@ class ScanMerging:
         return x, y
 
     def homogeneous_coordinates(self, x_lidar, y_lidar):
-        x_rotated = x_lidar
-        y_rotated = -y_lidar
+        import numpy as np
 
-        X_cam = x_rotated
-        Y_cam = 0.1
-        Z_cam = y_rotated - 0
+        # 3D point in LiDAR coordinate frame (assume z = 0 for 2D lidar)
+        point_lidar = np.array([[x_lidar], [y_lidar], [0], [1]])
 
-        point_cam = np.array([[X_cam], [Y_cam], [Z_cam]])
+        # Rotation matrix (you may need to double-check this)
+        R = np.array([
+            [1, 0, 0],
+            [0, 0, 1],  # Swapped 2nd and 3rd axes
+            [0, -1, 0]
+        ])
 
+        # Translation vector (camera is 0.3m in front, 0.5m below LiDAR)
+        t = np.array([[-0.3], [0], [0.5]])
+
+        # Homogeneous transformation matrix (4x4)
+        T = np.vstack((np.hstack((R, t)), np.array([[0, 0, 0, 1]])))
+
+        # Transform LiDAR point to camera coordinates
+        point_cam_homogeneous = T @ point_lidar
+        point_cam = point_cam_homogeneous[:3]  # extract x, y, z
+
+        # Camera intrinsic matrix
         k = np.array([
             [self.focal_length, 0, self.image_width / 2],
             [0, self.focal_length, self.image_height / 2],
             [0, 0, 1]
         ])
 
+        # Project to image plane
         projected = k @ point_cam
-
         u = projected[0][0] / projected[2][0]
         v = projected[1][0] / projected[2][0]
 
@@ -114,6 +111,8 @@ class ScanMerging:
 
             # Then, draw lidar points with color depending on whether they are inside any bbox
             for angle, distance in scan:
+                if distance < 300:
+                    continue
                 x, y = self.coordinate_conversion(angle, distance, angle_offset=90)
                 u, v = self.homogeneous_coordinates(x, y)
 
@@ -149,6 +148,8 @@ class ScanMerging:
 
                 if distances_in_box:
                     estimated_distance = np.median(distances_in_box)
+                    if estimated_distance < 0.3:
+                        continue
                     print(f"Estimated distance to {class_name}: {estimated_distance:.2f} m")
 
                     cv2.putText(frame, f"{estimated_distance:.2f} m",
@@ -165,6 +166,47 @@ class ScanMerging:
         print("Stopping Lidar")
         self.lidar.disconnect()
 
+    def get_frame_with_detections(self):
+        ret, frame = self.cam.read()
+        if not ret:
+            return None, []
+
+        scan = self.get_latest_scan()
+        results = self.model(frame)
+        detections = results.xyxy[0].cpu().numpy()
+
+        u_temp, v_temp = [], []
+        for angle, distance in scan:
+            if distance < 300:
+                continue
+            x, y = self.coordinate_conversion(angle, distance, angle_offset=90)
+            u, v = self.homogeneous_coordinates(x, y)
+            u_temp.append(u)
+            v_temp.append(v)
+
+        annotated_objects = []
+        for det in detections:
+            x1, y1, x2, y2, conf, class_id = det[:6]
+            class_name = self.model.names[int(class_id)]
+
+            distances_in_box = []
+            for (angle, distance), u, v in zip(scan, u_temp, v_temp):
+                if x1 <= u <= x2 and y1 <= v <= y2:
+                    distances_in_box.append(distance / 1000.0)
+
+            if distances_in_box:
+                estimated_distance = np.median(distances_in_box)
+            else:
+                estimated_distance = -1
+
+            annotated_objects.append({
+                "bbox": (x1, y1, x2, y2),
+                "class": class_name,
+                "confidence": conf,
+                "distance": estimated_distance
+            })
+
+        return frame, annotated_objects
 
 if __name__ == '__main__':
     weights_path = "assets/yolov5s.pt"

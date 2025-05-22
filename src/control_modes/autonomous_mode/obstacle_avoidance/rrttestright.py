@@ -22,7 +22,7 @@ class RRTStar:
         self.step_size = step_size
         self.max_iter = max_iter
         self.node_list = [self.start]
-        self.goal_region_radius = 0.5
+        self.goal_region_radius = 0.4
         self.search_radius = 5.0
         self.path = None
         self.goal_reached = False
@@ -126,13 +126,32 @@ class RRTStar:
 
         return Node(rand_x, rand_y)
 
+    def is_near_obstacle_and_x_greater_than_minus_one(self, node, threshold=1.0):
+        if node.x <= -1.5 or node.x >= 4.0:
+            return False  # x is within the allowed range
+
+        for (ox, oy, width, height) in self.obstacles:
+            # Check distance from node to obstacle bounding box
+            closest_x = max(ox, min(node.x, ox + width))
+            closest_y = max(oy, min(node.y, oy + height))
+            dist = math.hypot(node.x - closest_x, node.y - closest_y)
+            if dist < threshold:
+                return True  # Too close to obstacle while x > -1
+
+        return False
+
     def steer(self, from_node, to_node):
-        """Steer from one node to another, step-by-step."""
         theta = math.atan2(to_node.y - from_node.y, to_node.x - from_node.x)
-        new_node = Node(from_node.x + self.step_size * math.cos(theta),
-                        from_node.y + self.step_size * math.sin(theta))
+        new_x = from_node.x + self.step_size * math.cos(theta)
+        new_y = from_node.y + self.step_size * math.sin(theta)
+
+        new_node = Node(new_x, new_y)
         new_node.cost = from_node.cost + self.step_size
         new_node.parent = from_node
+
+        if self.is_near_obstacle_and_x_greater_than_minus_one(new_node):
+            return None
+
         return new_node
 
     def is_collision_free(self, node):
