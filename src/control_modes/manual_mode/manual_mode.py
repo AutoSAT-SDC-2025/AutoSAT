@@ -8,7 +8,7 @@ from ...car_variables import CarType, HunterControlMode, KartGearBox
 from ...gamepad import Gamepad
 from ...gamepad.controller_mapping import ControllerMapping
 from ...misc import calculate_steering, calculate_throttle, controller_break_value, dead_man_switch, setup_listeners
-from ..recording_mode.recording_mode import RecordMode
+
 
 class ManualMode(IControlMode):
 
@@ -19,25 +19,21 @@ class ManualMode(IControlMode):
         can_creator = select_can_controller_creator(self.car_type)
         self.can_controller = create_can_controller(can_creator, self.can_bus)
         setup_listeners(self.can_controller, self.car_type)
-        
+
         self.steering = 0.0
         self.throttle = 0.0
         self.park = True
-
-        self.recording = False
-        self.recorder = None
 
         if Gamepad.available():
             logging.info("Connected to Gamepad")
             self.gamepad = Gamepad.XboxOne()
             self.gamepad.startBackgroundUpdates()
-            
+
             self.gamepad.addAxisMovedHandler(ControllerMapping.L_joystickX, self.handle_steering)
             self.gamepad.addAxisMovedHandler(ControllerMapping.R_joystickY, self.handle_throttle)
             self.gamepad.addAxisMovedHandler(ControllerMapping.park, self.handle_park)
-            
-            self.gamepad.addButtonPressedHandler(ControllerMapping.buttonExit, self.stop_manual_mode)
 
+            self.gamepad.addButtonPressedHandler(ControllerMapping.buttonExit, self.stop_manual_mode)
 
             self.gamepad.rumble(strong_magnitude=30000, weak_magnitude=30000, duration_ms=1000)
         else:
@@ -58,22 +54,8 @@ class ManualMode(IControlMode):
         self.park = True if value < trigger_threshold else False
 
     def start(self) -> None:
+        """Start manual mode."""
         logging.info("Starting manual mode...")
-
-        # Ask user if they want to record
-        user_input = input("Record this session? (y/n): ").strip().lower()
-        if user_input == 'y':
-            self.recording = True
-            self.recorder = RecordMode(save_transforms=True)
-            self.recorder.setup_cameras()
-
-            print("Select capture mode:")
-            print("1 = all (left, front, right + stitched)")
-            print("2 = only 3 main cams (left, front, right)")
-            print("3 = only front camera")
-            print("4 = stitched only (requires all cameras)")
-            self.record_mode = input("Enter mode [1-4]: ").strip()
-
         try:
             self.can_controller.start()
             while self.gamepad and self.gamepad.isConnected() and self.__running:
@@ -86,21 +68,14 @@ class ManualMode(IControlMode):
                     self.can_controller.set_throttle(self.throttle)
                     self.can_controller.set_steering(self.steering)
                     self.can_controller.set_break(controller_break_value(self.gamepad))
-
-                if self.recording:
-                    self.recorder.capture_and_save(self.record_mode)
-
                 time.sleep(0.01)
-
         except Exception as e:
             logging.error(f"Error in manual mode: {e}")
         finally:
             self.stop()
 
     def stop(self) -> None:
-        if self.recording and self.recorder:
-            self.recorder.stop()
-
+        """Stop manual mode."""
         if self.gamepad and self.gamepad.isConnected():
             self.gamepad.disconnect()
         if self.car_type == CarType.hunter:
@@ -108,7 +83,6 @@ class ManualMode(IControlMode):
         else:
             self.can_controller.set_kart_gearbox(KartGearBox.neutral)
             self.can_controller.set_break(100)
-
         disconnect_from_can_interface(self.can_bus)
         logging.info("Exiting... \nStopping manual mode")
 
