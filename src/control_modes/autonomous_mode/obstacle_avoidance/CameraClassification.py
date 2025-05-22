@@ -1,10 +1,7 @@
-import threading
-
-import cv2
-from IPython.core.pylabtools import figsize
-
 from ..object_detection.Detection import ObjectDetection
 
+import threading
+import cv2
 from rplidar import RPLidar
 import math
 import torch
@@ -12,14 +9,12 @@ import numpy as np
 import matplotlib
 
 matplotlib.use('TKAgg')
-import matplotlib.pyplot as plt
-
 
 class ScanMerging:
     def __init__(self, weights_path, input_source):
         self.object_detection = ObjectDetection(weights_path, input_source)
         self.cam = cv2.VideoCapture(1)
-        self.model = torch.hub.load('ultralytics/yolov5', 'custom', path="assets/yolov5s.pt", force_reload=True)
+        self.model = torch.hub.load('ultralytics/yolov5', 'custom', path="assets/v5_model.pt", force_reload=True)
         self.lidar = RPLidar("COM3")
         self.image_width = 848
         self.image_height = 480
@@ -209,7 +204,7 @@ class ScanMerging:
         return frame, annotated_objects
 
 if __name__ == '__main__':
-    weights_path = "assets/yolov5s.pt"
+    weights_path = "assets/v5_model.pt"
     input_source = "video"
     handler = ScanMerging(weights_path, input_source)
     handler.overlay_on_camera()
