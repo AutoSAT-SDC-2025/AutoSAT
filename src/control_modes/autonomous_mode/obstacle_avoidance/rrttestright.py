@@ -39,7 +39,7 @@ class RRTStar:
         obstacles = []
         for _ in range(num_obstacles):
             ox = -1.5
-            oy = 5
+            oy = 8
             width = 3
             height = 4
             obstacles.append((ox, oy, width, height))  # Rectangle defined by bottom-left corner and size
@@ -94,6 +94,40 @@ class RRTStar:
                     return False
         return True
 
+    def plan_with_waypoint(self, waypoint):
+        """
+        Plan a path from start to goal via a specified waypoint.
+        """
+        # Stage 1: From start to waypoint
+        rrt_stage1 = RRTStar((self.start.x, self.start.y), (waypoint.x, waypoint.y),
+                             num_obstacles=0,  # reuse obstacles
+                             map_size=self.map_size,
+                             step_size=self.step_size,
+                             max_iter=self.max_iter,
+                             obstacles=self.obstacles)
+        path1 = rrt_stage1.search()
+        if not path1:
+            print("Failed to reach waypoint.")
+            return None
+
+        # Stage 2: From waypoint to goal
+        rrt_stage2 = RRTStar((waypoint.x, waypoint.y), (self.goal.x, self.goal.y),
+                             num_obstacles=0,
+                             map_size=self.map_size,
+                             step_size=self.step_size,
+                             max_iter=self.max_iter,
+                             obstacles=self.obstacles)
+        path2 = rrt_stage2.search()
+        if not path2:
+            print("Failed to reach goal from waypoint.")
+            return None
+
+        # Combine the two paths, excluding duplicated waypoint node
+        full_path = path1[:-1] + path2
+        self.path = self.smooth_path_preserve_waypoint(full_path, waypoint)
+        self.goal_reached = True
+        return self.path
+
     def plan(self):
         """Main RRT* planning loop."""
         for i in range(self.max_iter):
@@ -126,8 +160,27 @@ class RRTStar:
 
         return Node(rand_x, rand_y)
 
+    def smooth_path_preserve_waypoint(self, path, waypoint, iterations=100):
+        """Smooth the path but ensure the waypoint remains in the path."""
+        if not path:
+            return path
+
+        for _ in range(iterations):
+            i = random.randint(0, len(path) - 2)
+            j = random.randint(i + 1, len(path) - 1)
+
+            # Skip any shortcut that would remove the waypoint
+            if any(math.isclose(n.x, waypoint.x, abs_tol=0.01) and math.isclose(n.y, waypoint.y, abs_tol=0.01)
+                   for n in path[i + 1:j]):
+                continue
+
+            if self.is_straight_path_collision_free(path[i], path[j]):
+                path = path[:i + 1] + path[j:]
+
+        return path
+
     def is_near_obstacle_and_x_greater_than_minus_one(self, node, threshold=1.0):
-        if node.x <= -1.5 or node.x >= 4.0:
+        if node.x <= -1.5 or node.x >= -3.0:
             return False  # x is within the allowed range
 
         for (ox, oy, width, height) in self.obstacles:
@@ -283,15 +336,14 @@ def animate(i):
 if __name__ == "__main__":
     start = [0, 0]
     goal = [0, 15]
-    num_obstacles = 1  # Number of random obstacles
+    waypoint = Node(-2.5, 3)
     map_size = [10, 20]
+    num_obstacles = 1
 
     rrt_star = RRTStar(start, goal, num_obstacles, map_size)
-    rrt_star.search()
-    if rrt_star.path:
-        rrt_star.path = rrt_star.smooth_path(rrt_star.path, iterations=200)
-        rrt_star.draw_path()
+    path = rrt_star.plan_with_waypoint(waypoint)
 
-    # Create animation
-    ani = animation.FuncAnimation(rrt_star.fig, animate, frames=rrt_star.max_iter, interval=10, repeat=False)
-    plt.show()
+    if path:
+        rrt_star.draw_path()
+        ani = animation.FuncAnimation(rrt_star.fig, animate, frames=rrt_star.max_iter, interval=10, repeat=False)
+        plt.show()
