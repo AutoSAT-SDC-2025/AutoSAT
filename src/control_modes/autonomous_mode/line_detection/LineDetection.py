@@ -4,6 +4,9 @@ import numpy as np
 from src.control_modes.autonomous_mode.line_detection.LineProcessor import clusterLines, combineLines, getLines
 
 
+
+enable_debug = False
+
 class LineFollowingNavigation:
     def __init__(self, width=848, height=480, scale=1):
         self.width = width
@@ -207,25 +210,25 @@ class LineFollowingNavigation:
         road_mask[:, x_start:x_end] = 255
         
         # Display road mask
-        cv2.imshow("1. Road Mask", road_mask)
+        if enable_debug: cv2.imshow("1. Road Mask", road_mask)
         
         # Apply mask to small image
         small_masked = cv2.bitwise_and(small_img, small_img, mask=road_mask)
         
         # Display masked image
-        cv2.imshow("2. Masked Image", small_masked)
+        if enable_debug: cv2.imshow("2. Masked Image", small_masked)
         
         # Fast grayscale conversion
         gray = cv2.cvtColor(small_masked, cv2.COLOR_BGR2GRAY)
         
         # Display grayscale image
-        cv2.imshow("3. Grayscale", gray)
+        if enable_debug: cv2.imshow("3. Grayscale", gray)
         
         # Apply direct threshold to isolate white lines - with higher threshold to exclude walls
         _, binary = cv2.threshold(gray, 190, 255, cv2.THRESH_BINARY)  # Increased from 180 to 190
         
         # Display thresholded image
-        cv2.imshow("4. Thresholded", binary)
+        if enable_debug: cv2.imshow("4. Thresholded", binary)
         
         # Focus only on bottom part of image
         roi_height = int(small_img.shape[0] * 0.5)  # Increased from 0.4 to 0.5
@@ -233,14 +236,14 @@ class LineFollowingNavigation:
         binary_roi[:small_img.shape[0] - roi_height, :] = 0
         
         # Display ROI image
-        cv2.imshow("5. ROI", binary_roi)
+        if enable_debug: cv2.imshow("5. ROI", binary_roi)
         
         # Quick dilation to connect broken lines
         kernel = np.ones((3, 3), np.uint8)
         binary_dilated = cv2.dilate(binary_roi, kernel, iterations=1)
         
         # Display dilated image
-        cv2.imshow("6. Dilated", binary_dilated)
+        if enable_debug: cv2.imshow("6. Dilated", binary_dilated)
         
         # Direct Hough line detection on binary image
         lines = cv2.HoughLinesP(
@@ -260,7 +263,7 @@ class LineFollowingNavigation:
                 cv2.line(line_vis, (x1, y1), (x2, y2), (0, 0, 255), 2)
 
         # Display lines on binary image
-        cv2.imshow("7. Detected Lines", line_vis)
+        if enable_debug: cv2.imshow("7. Detected Lines", line_vis)
 
         # Scale lines back to original size
         scaled_lines = []
@@ -318,7 +321,7 @@ class LineFollowingNavigation:
                         filtered_lines.append(line)
     
         # Display debug visualization for angles
-        cv2.imshow("8. Line Angles", debug_vis)
+        if enable_debug: cv2.imshow("8. Line Angles", debug_vis)
         
         # Create visualization of filtered lines
         filtered_vis = np.zeros((self.height, self.width, 3), dtype=np.uint8)
@@ -327,7 +330,7 @@ class LineFollowingNavigation:
             cv2.line(filtered_vis, (x1, y1), (x2, y2), (0, 255, 0), 2)
         
         # Display filtered lines
-        cv2.imshow("9. Filtered Lines", filtered_vis)
+        if enable_debug: cv2.imshow("9. Filtered Lines", filtered_vis)
         
         # Split lines into left and right
         left_lines = []
@@ -573,7 +576,7 @@ class LineFollowingNavigation:
             # Create a visualization of detected glare
             glare_vis = img.copy()
             glare_vis[glare_mask > 0] = [0, 0, 255]  # Mark glare areas in red
-            cv2.imshow("Glare Detection", glare_vis)
+            if enable_debug: cv2.imshow("Glare Detection", glare_vis)
             
             # Apply adaptive correction based on glare severity
             if glare_percentage > 15:
