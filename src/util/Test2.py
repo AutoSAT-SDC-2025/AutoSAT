@@ -11,10 +11,12 @@ from .Render import Renderer
 WIDTH = 848
 HEIGHT = 480
 
+
 def load_image_paths(folder_path):
     return sorted(glob.glob(os.path.join(folder_path, '*.png')) +
                   glob.glob(os.path.join(folder_path, '*.jpg')) +
                   glob.glob(os.path.join(folder_path, '*.jpeg')))
+
 
 def main(weights_path: str, input_source: str, image_folder: str):
     print("Starting image viewer...")
@@ -77,5 +79,14 @@ def main(weights_path: str, input_source: str, image_folder: str):
 
     cv2.destroyAllWindows()
 
+
 if __name__ == '__main__':
-    main('assets/v5_model.pt', 'images', 'D:/gebruiker/Desktop/Test-Data/stitched')
+
+    path = 'D:/gebruiker/Desktop/Test-Data/'
+    # ask for which camera (stitched, front, topdown, left, right)
+    inp = input("Enter camera type (stitched, front, topdown, left, right): ").strip().lower()
+    if inp not in ['stitched', 'front', 'topdown', 'left', 'right']:
+        print("Invalid camera type. Defaulting to stitched.")
+        inp = 'stitched'
+
+    main('assets/v5_model.pt', 'images', path + inp + '/')
