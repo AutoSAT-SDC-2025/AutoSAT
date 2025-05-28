@@ -89,4 +89,5 @@ if __name__ == '__main__':
         print("Invalid camera type. Defaulting to stitched.")
         inp = 'stitched'
 
+   #todo: kalman checkout
     main('assets/v5_model.pt', 'images', path + inp + '/')
