@@ -8,6 +8,7 @@ from pathlib import Path
 
 start_frame = 1119
 start_frame = 1552
+start_frame = 0
 map_scale = 0.0483398
 
 x, y = (5640*(1/map_scale),350*(1/map_scale))
@@ -19,15 +20,16 @@ mapping = False
 current_file = Path(__file__).resolve()
 project_root = current_file.parents[3]  # adjust this number as needed
 K = np.load(project_root/"var/camera/middle.npy")
-cap = cv.VideoCapture("/home/thimo/Seafile/Git/SDC/data/recording 29-03-2024 08-56-36.mp4")
+# cap = cv.VideoCapture("/home/thimo/Seafile/Git/SDC/data/recording 29-03-2024 08-56-36.mp4")
+cap = cv.VideoCapture("/home/thimo/Seafile/Git/AutoSAT/src/control_modes/autonomous_mode/localization/output.mp4")
 
 ret, prev_frame = cap.read()
 
-# A = np.identity(3)
-# A[0,2] = 500
-# A[1,2] = 900
-# B = A@matrix
-# np.save("lane_detection_B.npy", B)
+A = np.identity(3)
+A[0,2] = 500
+A[1,2] = 900
+B = A@np.load("/home/thimo/Git/AutoSAT/src/var/B_small.npy")
+np.save("lane_detection_B.npy", B)
 lanedetector = LaneDetector()
 if mapping is True:
     mapper = Mapper(scale=map_scale)
@@ -41,6 +43,8 @@ if not ret:
     exit()
 ret, frame = cap.read()
 frame = cv.undistort(frame, K, None)
+# print(frame.shape)
+# exit()
 localizer = Localizer()
 localizer.set_start_location(x, y, theta)
 gframe = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
@@ -57,9 +61,10 @@ while cap.isOpened():
     
     
     start_time = time.perf_counter()
-    frame = cv.undistort(frame, K, None)
+    # frame = cv.undistort(frame, K, None)
+    frame2 = cv.resize(frame, (848, 480))
     cv.imshow("frame", frame)
-    lane = lanedetector(frame)
+    lane = lanedetector(frame2)
     lane = cv.resize(lane, (128, 64))
     localizer.update(frame, lane)
     end_time = time.perf_counter()
@@ -91,7 +96,7 @@ while cap.isOpened():
     print("Theta: ", rotation)
     print("Frame_count: ", i)
     print("-"*10)
-    if cv.waitKey(1) & 0xFF == ord('q'):
+    if cv.waitKey(0) & 0xFF == ord('q'):
         cv.imwrite("data/lane.png", lane)
         cv.imwrite("data/map_input.png", map_input)
         cv.imwrite("data/lane_input.png", lane)

@@ -60,16 +60,16 @@ class ParticleFilter:
     def update(self, lane, dx, dy, dtheta) -> None:
         trust_score = self.comparitor.trust_score(lane)
         v = np.sqrt(dx**2+dy**2)
-        print("SPEED", v)
+        # print("SPEED", v)
         self.update_particles(dx, dy, dtheta)
         particle, idx, score = self.find_location(lane)
         x = particle[0]
         y = particle[1]
         theta = particle[2]
-        print("score", score)
-        print("trust", trust_score)
+        # print("score", score)
+        # print("trust", trust_score)
         score = min(1, np.exp(-2*(score-6)))*trust_score
-        print("SCORE:", score)
+        # print("SCORE:", score)
         self.kalman.predict(np.array([[v],[dtheta]]), np.array([[x],[y],[theta]]), score)
         self.x = self.kalman.x[0][0]
         self.y = self.kalman.x[1][0]

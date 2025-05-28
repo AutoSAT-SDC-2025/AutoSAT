@@ -95,8 +95,7 @@ class KalmanFilter:
             [self.R_B[0,0]*abs(np.cos(x_p[3,0]))+self.R_B[1,1]*abs(np.sin(x_p[3,0])), self.R_B[0,0]*abs(np.sin(x_p[3,0]))+self.R_B[1,1]*abs(np.cos(x_p[3,0])), self.R_B[2,2]]
         )
         # R_B = R_B*(np.exp((1-score)/(score+0.1)))
-        R_B = R_B* (1 + 99 * (1 - 1 / (1 + np.exp(-20 * (score - 0.5)))))
-        print(R_B)
+        # R_B = R_B* (1 + 99 * (1 - 1 / (1 + np.exp(-20 * (score - 0.5)))))
         K = p_p @ self.H_B.T @ np.linalg.inv(self.H_B @ p_p @ self.H_B.T + R_B)
         self.x = x_p + K @ (z_b - self.H_B @ x_p)
         self.P = (np.eye(5) - K @ self.H_B) @ p_p
