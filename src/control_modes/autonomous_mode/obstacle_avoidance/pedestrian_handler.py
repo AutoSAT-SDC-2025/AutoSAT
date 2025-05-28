@@ -1,12 +1,9 @@
 from rplidar import RPLidar
 import cv2
-import math
-import numpy as np
-from ..object_detection.Detection import ObjectDetection
 from ....can_interface.bus_connection import connect_to_can_interface, disconnect_from_can_interface
 from ....can_interface.can_factory import select_can_controller_creator, create_can_controller
 from src.util.video import get_camera_config
-from .CameraClassification import ScanMerging
+from ..object_detection.Detection import ObjectDetection
 
 class PedestrianHandler:
     def __init__(self, weights_path, input_source):
@@ -21,25 +18,24 @@ class PedestrianHandler:
             self.lidar = RPLidar("Com3")
         except:
             self.lidar = RPLidar("/dev/ttyUSB0")
-        self.scan_merging = ScanMerging(weights_path, input_source)
+        #self.scan_merging = ScanMerging(weights_path, input_source)
+        self.object_detection = ObjectDetection(weights_path, input_source)
         self.cam = cv2.VideoCapture(1)
         self.person_distance_threshold = 2
         self.previous_detection = {}
         self.focal_length = 540
-        self.image_height = 1080
-        self.image_width = 1920
+        self.image_height = 480
+        self.image_width = 848
         self.initial_position = None
         self.current_position = None
         self.direction = None
 
-
     def detect_objects(self):
-        while self.cam.isOpened():
-            ret, frame = self.cam.read()
-            if not ret:
-                break
-            detections = self.scan_merging.get_frame_with_detections()
-            return detections
+        ret, frame = self.cam.read()
+        if not ret:
+            print("Failed to capture frame from camera")
+            return []
+        return self.object_detection.detect_objects(frame)
 
     def get_initial_position(self, detections):
         for det in detections:
@@ -47,10 +43,8 @@ class PedestrianHandler:
                 x1, _, x2, _ = det["bbox"]
                 if (x1 + x2) / 2 < self.image_width / 2:
                     self.initial_position = "Left"
-                    #return self.initial_position
                 else:
                     self.initial_position = "Right"
-                    #return self.initial_position
 
     def get_direction(self, detections):
         for det in detections:
@@ -62,11 +56,14 @@ class PedestrianHandler:
                 if obj_id in self.previous_detection:
                     prev_x_center = self.previous_detection[obj_id]["x_center"]
 
-                    if x_center > prev_x_center + 5:
+                    if x_center > prev_x_center + 2:
+                        print("Pedestrian is going right")
                         self.direction = "Right"
-                    elif x_center < prev_x_center - 5:
+                    elif x_center < prev_x_center - 2:
+                        print("Pedestrian is going left")
                         self.direction = "Left"
                     else:
+                        print("Pedestrian is stationary")
                         self.direction = "Stationary"
                 else:
                     self.direction = "Unknown"
@@ -79,7 +76,7 @@ class PedestrianHandler:
         for det in detections:
             if det["class"] == "Person":
                 x_center = (det["bbox"][0] + det["bbox"][2]) / 2
-
+                print(x_center)
                 if x_center < self.image_width / 2:
                     self.current_position = "Left"
                 elif x_center > self.image_width / 2:
@@ -100,41 +97,43 @@ class PedestrianHandler:
             if obj["class"] == "Person" and 0 < obj["distance"] < self.person_distance_threshold:
                 self.can_controller.set_steering_and_throttle(0, 0)
                 self.can_controller.set_parking_mode(1)
-                return "Stopped for pedestrian"
+                print("Stopped for pedestrian")
+                return True
         self.can_controller.set_parking_mode(0)
         self.can_controller.set_steering_and_throttle(0, 300)
         return "Continuing to drive"
 
     def continue_driving(self):
         if self.pedestrian_crossed():
+            print("Continuing driving")
             ped_parking_mode = self.can_controller.set_parking_mode(0)
             ped_driving_mode = self.can_controller.set_steering_and_throttle(0, 300)
             return ped_driving_mode, ped_parking_mode
 
     def main(self):
-        weights_path = "assets/v5_model.pt"
-        input_source = "video"
-        handler = PedestrianHandler(weights_path, input_source)
         initial_position_set = False
 
         while True:
-            detections = handler.detect_objects()
+            detections = self.detect_objects()
             if not detections:
                 continue
 
             if not initial_position_set:
-                handler.get_initial_position(detections)
+                self.get_initial_position(detections)
                 initial_position_set = True
 
-            handler.get_direction(detections)
-            handler.get_current_pos(detections)
+            self.get_direction(detections)
+            self.get_current_pos(detections)
 
-            status = handler.stop_car(detections)
+            status = self.stop_car(detections)
             print(status)
 
-            if handler.pedestrian_crossed():
+            if self.pedestrian_crossed():
                 drive_status = handler.continue_driving()
                 print("Pedestrian crossed. Continuing to drive:", drive_status)
 
-    if __name__ == "__main__":
-        main()
+if __name__ == "__main__":
+    weights_path = "assets/v5_model.pt"
+    input_source = "video"
+    handler = PedestrianHandler(weights_path, input_source)
+    handler.main()

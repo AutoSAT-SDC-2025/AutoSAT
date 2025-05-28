@@ -52,17 +52,26 @@ class ScanMerging:
         return x, y
 
     def homogeneous_coordinates(self, x_lidar, y_lidar):
-        import numpy as np
-
         # 3D point in LiDAR coordinate frame (assume z = 0 for 2D lidar)
         point_lidar = np.array([[x_lidar], [y_lidar], [0], [1]])
 
-        # Rotation matrix (you may need to double-check this)
-        R = np.array([
+        # Base rotation matrix for LiDAR to camera alignment
+        R_base = np.array([
             [1, 0, 0],
             [0, 0, 1],  # Swapped 2nd and 3rd axes
             [0, -1, 0]
         ])
+
+        # Additional rotation matrix for -20 degree tilt around X-axis
+        angle = np.deg2rad(-20)  # Convert -20 degrees to radians
+        R_tilt = np.array([
+            [1, 0, 0],
+            [0, np.cos(angle), -np.sin(angle)],
+            [0, np.sin(angle), np.cos(angle)]
+        ])
+
+        # Combine rotations
+        R = R_tilt @ R_base
 
         # Translation vector (camera is 0.3m in front, 0.5m below LiDAR)
         t = np.array([[-0.3], [0], [0.5]])

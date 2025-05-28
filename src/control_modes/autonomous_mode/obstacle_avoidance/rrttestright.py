@@ -22,6 +22,7 @@ class RRTStar:
         self.step_size = step_size
         self.max_iter = max_iter
         self.node_list = [self.start]
+        self.waypoint = Node(-2.5, 3)
         self.goal_region_radius = 0.4
         self.search_radius = 5.0
         self.path = None
@@ -181,15 +182,14 @@ class RRTStar:
 
     def is_near_obstacle_and_x_greater_than_minus_one(self, node, threshold=1.0):
         if node.x <= -1.5 or node.x >= -3.0:
-            return False  # x is within the allowed range
+            return False
 
         for (ox, oy, width, height) in self.obstacles:
-            # Check distance from node to obstacle bounding box
             closest_x = max(ox, min(node.x, ox + width))
             closest_y = max(oy, min(node.y, oy + height))
             dist = math.hypot(node.x - closest_x, node.y - closest_y)
             if dist < threshold:
-                return True  # Too close to obstacle while x > -1
+                return True
 
         return False
 
@@ -336,12 +336,11 @@ def animate(i):
 if __name__ == "__main__":
     start = [0, 0]
     goal = [0, 15]
-    waypoint = Node(-2.5, 3)
     map_size = [10, 20]
     num_obstacles = 1
 
     rrt_star = RRTStar(start, goal, num_obstacles, map_size)
-    path = rrt_star.plan_with_waypoint(waypoint)
+    path = rrt_star.plan_with_waypoint(rrt_star.waypoint)
 
     if path:
         rrt_star.draw_path()
