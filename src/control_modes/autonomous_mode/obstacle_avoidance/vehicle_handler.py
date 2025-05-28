@@ -61,16 +61,13 @@ class VehicleHandler:
             path = []
             points = [start]
 
-            # Always use the predefined waypoints
             points.extend(waypoints)
 
-            # Filter out any passed-in waypoints that are too close to predefined ones
             if waypoints:
                 for wp in waypoints:
                     if not self.is_too_close_to_predefined(wp, waypoints):
                         points.append(wp)
 
-            # Add goal point
             points.append(goal[:2])
 
             for i in range(len(points) - 1):
@@ -82,7 +79,6 @@ class VehicleHandler:
                     return None
 
                 segment_path = rrt_star.smooth_path(segment_path, iterations=200)
-                # Remove duplicate point if path segments join exactly
                 if path and segment_path[0] == path[-1]:
                     segment_path = segment_path[1:]
 
