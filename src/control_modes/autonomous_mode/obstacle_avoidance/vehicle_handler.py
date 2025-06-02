@@ -3,12 +3,14 @@ from ....can_interface.bus_connection import connect_to_can_interface
 from ....can_interface.can_factory import select_can_controller_creator, create_can_controller
 from src.util.video import get_camera_config
 from ..localization.localization import Localizer
-from .CameraClassification import ScanMerging
+from ..object_detection.Detection import ObjectDetection
 
 from rplidar import RPLidar
+from math import floor
 import cv2
 import math
 import matplotlib.pyplot as plt
+import numpy as np
 
 class VehicleHandler:
     def __init__(self, weights_path, input_source, localizer):
@@ -20,11 +22,12 @@ class VehicleHandler:
         self.can_creator = select_can_controller_creator(self.car_type)
         self.can_controller = create_can_controller(self.can_creator, self.can_bus)
         self.cams = get_camera_config()
-        self.scan_merging = ScanMerging(weights_path, input_source)
+        self.object_detection = ObjectDetection(weights_path, input_source)
         self.cam = cv2.VideoCapture(1)
-        self.lidar = RPLidar("COM3")
-        self.image_width = 1920
-        self.image_height = 1080
+        try: self.lidar = RPLidar("COM3")
+        except: self.lidar = RPLidar("/dev/ttyUSB0")
+        self.image_width = 848
+        self.image_height = 480
         self.focal_length = 540
         self.car_detected = False
         self.collision = False
@@ -45,8 +48,8 @@ class VehicleHandler:
                 return True
         return False
 
-    def set_waypoints(self):
-        waypoints = [[-2.5, 3], [-2.5, 13], [-2, 15], [-1, 16], [-0.5, 17]]
+    def set_waypoints(self, x, y):
+        waypoints = [[(-2.5 + x), (3 + y)], [(-2.5 + x), (13 + y)], [(-2 + x), (15+ y)], [(-1 + x), (16 + y)], [(-0.5 + x), (17 + y)]]
         return waypoints
 
     def set_rrt(self, goal, detections, waypoints):
@@ -185,17 +188,65 @@ class VehicleHandler:
         plt.grid(True)
         plt.show()
 
+    def iter_scans(self):
+        lidar_scan = []
+        try:
+            for new_scan, _, angle, distance in self.lidar.iter_measures():
+                if new_scan:
+                    if len(lidar_scan) > 5:
+                        yield lidar_scan
+                    lidar_scan = []
+
+                lidar_scan.append((angle, distance))
+
+        except KeyboardInterrupt:
+            print("Stopping Lidar")
+
+        finally:
+            self.lidar.stop()
+            self.lidar.disconnect()
+
+    def determine_closest(self, scan):
+        """Find and print the closest object distance from the scan data."""
+        scan_data = np.full(360, np.inf)
+
+        for _, angle, distance in scan:
+            angle_idx = min(359, floor(angle))
+
+            if distance < 150:  # Ignore very close objects
+                scan_data[angle_idx] = np.inf
+            else:
+                scan_data[angle_idx] = distance
+
+        closest_distance = np.min(scan_data)
+        print(f"Closest object distance: {closest_distance:.2f} mm")
+        return closest_distance
+
+    def check_collision(self, closest_distance):
+        if closest_distance < 0.5:
+            print("Collision detected, stopping the car")
+            self.can_controller.set_steering_and_throttle(0, 0)
+            self.collision = True
+            return True
+        return False
+
     def main(self):
         while self.cam.isOpened():
             ret, frame = self.cam.read()
             if not ret:
                 break
 
-            frame, detections = self.scan_merging.get_frame_with_detections()
+            frame, detections = self.object_detection.detect_objects(frame)
 
             x = self.localizer.x
             y = self.localizer.y
             theta = self.localizer.theta
+
+            for scan in self.iter_scans():
+                closest_distance = self.determine_closest(scan)
+                if self.check_collision(closest_distance):
+                    print("Collision detected, stopping the car")
+                    break
 
             for det in detections:
                 x1, y1, x2, y2 = det['bbox']
@@ -208,7 +259,7 @@ class VehicleHandler:
                     self.goal = self.set_goal(det, x, y, theta)
                     self.goal_set = True
                     if self.goal:
-                        waypoints = self.set_waypoints()
+                        waypoints = self.set_waypoints(x, y)
                         result = self.set_rrt(self.goal, detections, waypoints)
                         if result:
                             self.x_vals, self.y_vals = result
@@ -217,16 +268,17 @@ class VehicleHandler:
 
             cv2.imshow('Detection', frame)
 
-            if self.goal_set and self.path_found:
-                if self.x_vals and self.y_vals:
-                    x_wp, y_wp = self.x_vals[0], self.y_vals[0]
-                    if self.waypoint_reached(x_wp, y_wp):
-                        print("Waypoint reached.")
-                        self.x_vals.pop(0)
-                        self.y_vals.pop(0)
-                        continue
-                    elif len(self.x_vals) > 0:
-                        self.steer_toward_waypoint((x_wp, y_wp))
+            if not self.collision:
+                if self.goal_set and self.path_found:
+                    if self.x_vals and self.y_vals:
+                        x_wp, y_wp = self.x_vals[0], self.y_vals[0]
+                        if self.waypoint_reached(x_wp, y_wp):
+                            print("Waypoint reached.")
+                            self.x_vals.pop(0)
+                            self.y_vals.pop(0)
+                            continue
+                        elif len(self.x_vals) > 0:
+                            self.steer_toward_waypoint((x_wp, y_wp))
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
@@ -247,7 +299,6 @@ class VehicleHandler:
                 self.y_vals.pop(0)
             else:
                 self.steer_toward_waypoint((x_wp, y_wp))
-
 
 if __name__ == '__main__':
     weights_path = "assets/v5_model.pt"
