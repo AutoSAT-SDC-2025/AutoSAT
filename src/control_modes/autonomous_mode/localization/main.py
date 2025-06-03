@@ -8,10 +8,10 @@ from pathlib import Path
 
 start_frame = 1119
 start_frame = 1552
-start_frame = 0
+start_frame = 500
 map_scale = 0.0483398
 
-x, y = (5640*(1/map_scale),350*(1/map_scale))
+x, y = ((5440)*(1/map_scale),350*(1/map_scale))
 theta = np.pi/2
 
 mapping = False
