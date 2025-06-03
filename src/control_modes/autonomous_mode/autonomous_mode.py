@@ -1,7 +1,6 @@
 import logging
 import multiprocessing as mp
 from .line_detection.LineDetection import LineFollowingNavigation
-from .localization.main import frame
 from .localization import localization
 from .object_detection.ObjectDetection import ObjectDetection
 from ...camera.camera_controller import CameraController
