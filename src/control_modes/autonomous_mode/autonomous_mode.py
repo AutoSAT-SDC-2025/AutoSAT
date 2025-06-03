@@ -1,8 +1,8 @@
-import cv2
 import logging
 import multiprocessing as mp
 from .line_detection.LineDetection import LineFollowingNavigation
 from .localization.main import frame
+from .localization import localization
 from .object_detection.ObjectDetection import ObjectDetection
 from ...camera.camera_controller import CameraController
 from ...car_variables import CarType, HunterControlMode, KartGearBox, LineDetectionDims
@@ -46,6 +46,8 @@ class AutonomousMode(IControlMode):
         self.location.y = 0
         self.location.theta = 0
         self.location.img = None
+        self.localization_process = mp.Process(target=localization.localization_worker, args=(self.location,))
+        self.localization_process.start()
 
         self.vehicle_handler = VehicleHandler(weights_path='assets/v5_model.pt', input_source='video', localizer=localization_manager)
         self.pedestrian_handler = PedestrianHandler(weights_path='assets/v5_model.pt', input_source='video')
@@ -66,6 +68,9 @@ class AutonomousMode(IControlMode):
             while True:
                 top_view = self.camera_controller.get_top_view()
                 front_view = self.camera_controller.get_front_view()
+
+                self.location.img = front_view
+
                 self.renderer.clear()
 
                 steering_angle, speed, line_visuals = self.nav.process(top_view)
@@ -102,24 +107,21 @@ class AutonomousMode(IControlMode):
                     self.can_controller.set_steering_and_throttle(-(steering_angle * 10), 320)
                     self.can_controller.set_parking_mode(0)
 
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
-
         except Exception as e:
             logging.error(f"Error in autonomous mode: {e}")
         finally:
             self.stop()
-            cv2.destroyAllWindows()
 
     def stop(self) -> None:
         logging.info("Stopping autonomous mode.")
         self.camera_controller.disable_cameras()
         self.camera_controller = None
+        self.localization_process.terminate()
+        self.localization_process.join()
         if self.car_type == CarType.hunter:
             self.can_controller.set_control_mode(HunterControlMode.idle_mode)
         else:
             self.can_controller.set_kart_gearbox(KartGearBox.neutral)
             self.can_controller.set_break(100)
         self.can_controller.stop()
-        cv2.destroyAllWindows()
         disconnect_from_can_interface(self.can_bus)
