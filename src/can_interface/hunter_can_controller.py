@@ -15,8 +15,6 @@ class HunterCanController(ICanController):
         self.can_bus = bus
         self.__listeners = {}
 
-        self.__thread = threading.Thread(target=self.__listen, daemon=True)
-
         self.__movement_control_message = init_can_message(HunterControlCanIDs.movement_control.value)
         self.__movement_control_task = self.can_bus.send_periodic(self.__movement_control_message,
                                                                   CAN_MESSAGE_SENDING_SPEED)
@@ -34,6 +32,7 @@ class HunterCanController(ICanController):
         self.__listeners[message_id].append(listener)
 
     def start(self) -> None:
+        self.__thread = threading.Thread(target=self.__listen, daemon=True)
         self.__thread.start()
         logging.debug("started thread for __listen")
 
@@ -41,6 +40,12 @@ class HunterCanController(ICanController):
         pass
 
     def set_throttle(self, throttle_value: float) -> None:
+        pass
+
+    def set_kart_gearbox(self, kart_gearbox) -> None:
+        pass
+
+    def set_break(self, break_value: int) -> None:
         pass
 
     def set_steering_and_throttle(self, steering_angle: float, throttle_value: float) -> None:
@@ -56,6 +61,10 @@ class HunterCanController(ICanController):
     def set_parking_mode(self, parking_value: bool):
         self.__parking_control_message.data = list(bytearray(struct.pack('?', parking_value)))
         self.__parking_control_task.modify_data(self.__parking_control_message)
+
+    def stop(self) -> None:
+        if self.__thread and self.__thread.is_alive():
+            self.__thread.join(timeout=2)
 
     def __listen(self) -> None:
         while True:

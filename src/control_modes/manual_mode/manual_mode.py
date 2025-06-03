@@ -19,7 +19,7 @@ class ManualMode(IControlMode):
         can_creator = select_can_controller_creator(self.car_type)
         self.can_controller = create_can_controller(can_creator, self.can_bus)
         setup_listeners(self.can_controller, self.car_type)
-        
+
         self.steering = 0.0
         self.throttle = 0.0
         self.park = True
@@ -28,13 +28,12 @@ class ManualMode(IControlMode):
             logging.info("Connected to Gamepad")
             self.gamepad = Gamepad.XboxOne()
             self.gamepad.startBackgroundUpdates()
-            
+
             self.gamepad.addAxisMovedHandler(ControllerMapping.L_joystickX, self.handle_steering)
             self.gamepad.addAxisMovedHandler(ControllerMapping.R_joystickY, self.handle_throttle)
             self.gamepad.addAxisMovedHandler(ControllerMapping.park, self.handle_park)
-            
-            self.gamepad.addButtonPressedHandler(ControllerMapping.buttonExit, self.stop_manual_mode)
 
+            self.gamepad.addButtonPressedHandler(ControllerMapping.buttonExit, self.stop_manual_mode)
 
             self.gamepad.rumble(strong_magnitude=30000, weak_magnitude=30000, duration_ms=1000)
         else:
@@ -51,8 +50,8 @@ class ManualMode(IControlMode):
 
     def handle_park(self, value):
         """Callback for parking trigger"""
-        trigger_threshold = 0.8
-        self.park = True if value < trigger_threshold else False
+        trigger_threshold = -0.8
+        self.park = True if value > trigger_threshold else False
 
     def start(self) -> None:
         """Start manual mode."""
@@ -84,6 +83,7 @@ class ManualMode(IControlMode):
         else:
             self.can_controller.set_kart_gearbox(KartGearBox.neutral)
             self.can_controller.set_break(100)
+        self.can_controller.stop()
         disconnect_from_can_interface(self.can_bus)
         logging.info("Exiting... \nStopping manual mode")
 
