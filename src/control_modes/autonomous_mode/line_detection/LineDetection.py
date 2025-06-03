@@ -1,7 +1,8 @@
 import cv2
 import numpy as np
-
 from src.control_modes.autonomous_mode.line_detection.LineProcessor import clusterLines, combineLines, getLines
+
+enable_debug = True
 
 
 class LineFollowingNavigation:
@@ -9,343 +10,303 @@ class LineFollowingNavigation:
         self.width = width
         self.height = height
         self.scale = scale
+        # Memory for line tracking
+        self.prev_left_line = None
+        self.prev_right_line = None
+        self.frame_count = 0
 
-    def newLines(self, lines):
-        processed_lines = []
-        if lines is not None:
-            clusters = clusterLines(lines, int(self.scale * 10), 15)
-            for cluster in clusters:
-                combined_line = combineLines(cluster)
-                processed_lines.append(combined_line)
-            return processed_lines
-        return 0
+    def detect_white_lines(self, img):
+        """Simple and effective white line detection."""
+        # Convert to grayscale
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    def splitLines(self, lines):
-        """Split lines into left and right with simplified logic."""
-        if not lines:
+        # Apply Gaussian blur to reduce noise
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
+        # High threshold for white lines only
+        _, binary = cv2.threshold(blurred, 180, 255, cv2.THRESH_BINARY)
+
+        # Create ROI mask - focus on bottom half where road lines are
+        height, width = img.shape[:2]
+        mask = np.zeros_like(binary)
+
+        # Trapezoid ROI for road area - taller and wider at the top
+        roi_vertices = np.array([
+            [0, height],  # Bottom left
+            [width // 4, height // 3],  # Top left (wider and higher)
+            [3 * width // 4, height // 3],  # Top right (wider and higher)
+            [width, height]  # Bottom right
+        ], dtype=np.int32)
+
+        cv2.fillPoly(mask, [roi_vertices], 255)
+        masked = cv2.bitwise_and(binary, mask)
+
+        # Apply morphological operations to clean up
+        kernel = np.ones((3, 3), np.uint8)
+        cleaned = cv2.morphologyEx(masked, cv2.MORPH_CLOSE, kernel)
+        cleaned = cv2.dilate(cleaned, kernel, iterations=1)
+
+        if enable_debug:
+            cv2.imshow("1. Gray", gray)
+            cv2.imshow("2. Binary", binary)
+            cv2.imshow("3. ROI Mask", mask)
+            cv2.imshow("4. Masked", masked)
+            cv2.imshow("5. Cleaned", cleaned)
+
+        return cleaned
+
+    def detect_lines(self, binary_img):
+        """Detect lines using Hough transform."""
+        lines = cv2.HoughLinesP(
+            binary_img,
+            rho=1,
+            theta=np.pi / 180,
+            threshold=20,  # Lower threshold to catch more lines
+            minLineLength=40,  # Minimum line length
+            maxLineGap=20  # Maximum gap between line segments
+        )
+
+        return lines
+
+    def filter_lines(self, lines, img_shape):
+        """Filter lines by angle and position."""
+        if lines is None:
             return [], []
-            
+
+        height, width = img_shape[:2]
         left_lines = []
         right_lines = []
-        
+
         for line in lines:
-            x1, y1, x2, y2 = line
-            
-            # Simply divide based on position relative to center
-            mid_x = (x1 + x2) / 2
-            
-            if mid_x < self.width / 2:
-                left_lines.append(line)
-            else:
-                right_lines.append(line)
-                    
+            x1, y1, x2, y2 = line[0]
+
+            # Calculate line angle
+            if x2 - x1 == 0:  # Avoid division by zero
+                continue
+
+            angle = np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi
+
+            # Filter by angle - lane lines should be roughly diagonal
+            if abs(angle) < 25 or abs(angle) > 75:
+                continue
+
+            # Calculate line length
+            length = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+            if length < 30:  # Skip very short lines
+                continue
+
+            # Determine if line is on left or right side
+            center_x = (x1 + x2) / 2
+
+            if center_x < width / 2 and angle > 0:  # Left side, positive slope
+                left_lines.append([x1, y1, x2, y2])
+            elif center_x > width / 2 and angle < 0:  # Right side, negative slope
+                right_lines.append([x1, y1, x2, y2])
+
         return left_lines, right_lines
 
-    def longestLine(self, lines):
+    def get_best_line(self, lines):
+        """Get the longest/best line from a group."""
+        if not lines:
+            return None
+
+        best_line = None
         max_length = 0
-        longest_line = None
+
         for line in lines:
             x1, y1, x2, y2 = line
-            length = np.sqrt((abs(x2 - x1)) ** 2 + (abs(y2 - y1)) ** 2)
+            length = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+
             if length > max_length:
                 max_length = length
-                longest_line = line
-        return longest_line
+                best_line = line
 
-    def findTarget(self, left_lines, right_lines, horizon_height, img, left_weight=1, right_weight=1, weight_factor=1, bias=0, draw=1):
-        visuals = []
+        return best_line
 
-        if not left_lines and not right_lines:
-            return False, visuals
+    def extrapolate_line(self, line, img_height, horizon_y=200):
+        """Extrapolate line to full height."""
+        if line is None:
+            return None
 
-        elif not right_lines:
-            longest_left_line = self.longestLine(left_lines)
-            x1l, y1l, x2l, y2l = longest_left_line
+        x1, y1, x2, y2 = line
 
-            line_params_left = np.polyfit((x1l, x2l), (y1l, y2l), 1)
-            horizon_x_left = round((horizon_height - line_params_left[1]) / line_params_left[0])
+        # Calculate line slope and intercept
+        if x2 - x1 == 0:
+            return line  # Vertical line, return as is
 
-            visuals.append({
-                'type': 'line',
-                'start': (x1l, y1l),
-                'end': (x2l, y2l),
-                'color': (50, 200, 200),
-                'thickness': 3
-            })
-            visuals.append({
-                'type': 'circle',
-                'center': (horizon_x_left, horizon_height),
-                'radius': 3,
-                'color': (50, 200, 200),
-                'thickness': -1
-            })
+        slope = (y2 - y1) / (x2 - x1)
+        intercept = y1 - slope * x1
 
-            target = horizon_x_left
+        # Calculate x coordinates at horizon and bottom
+        x_bottom = int((img_height - intercept) / slope)
+        x_horizon = int((horizon_y - intercept) / slope)
 
-        elif not left_lines:
-            longest_right_line = self.longestLine(right_lines)
-            x1r, y1r, x2r, y2r = longest_right_line
+        return [x_horizon, horizon_y, x_bottom, img_height]
 
-            line_params_right = np.polyfit((x1r, x2r), (y1r, y2r), 1)
-            horizon_x_right = round((horizon_height - line_params_right[1]) / line_params_right[0])
+    def detect_clustered_lines(self, lines, img_shape):
+        """Detect clusters of lines and create thick purple lines for likely paths."""
+        if lines is None or len(lines) == 0:
+            return []
 
-            visuals.append({
-                'type': 'line',
-                'start': (x1r, y1r),
-                'end': (x2r, y2r),
-                'color': (100, 200, 200),
-                'thickness': 3
-            })
-            visuals.append({
-                'type': 'circle',
-                'center': (horizon_x_right, horizon_height),
-                'radius': 3,
-                'color': (100, 200, 200),
-                'thickness': -1
-            })
+        height, width = img_shape[:2]
+        clustered_lines = []
 
-            target = horizon_x_right
+        # Group lines by proximity and angle similarity (for dotted lines)
+        line_groups = []
 
-        else:
-            longest_left_line = self.longestLine(left_lines)
-            longest_right_line = self.longestLine(right_lines)
+        for line in lines:
+            x1, y1, x2, y2 = line[0]
 
-            x1r, y1r, x2r, y2r = longest_right_line
-            x1l, y1l, x2l, y2l = longest_left_line
+            # Calculate line properties
+            center_x = (x1 + x2) / 2
+            center_y = (y1 + y2) / 2
+            angle = np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi
 
-            line_params_right = np.polyfit((x1r, x2r), (y1r, y2r), 1)
-            horizon_x_right = round((horizon_height - line_params_right[1]) / line_params_right[0])
+            # Find if this line belongs to an existing group (for connecting dotted lines)
+            found_group = False
+            for group in line_groups:
+                # Check if line is close to group and has similar angle
+                group_center_x = np.mean([((l[0] + l[2]) / 2) for l in group])
+                group_center_y = np.mean([((l[1] + l[3]) / 2) for l in group])
+                group_angle = np.mean([np.arctan2(l[3] - l[1], l[2] - l[0]) * 180 / np.pi for l in group])
 
-            line_params_left = np.polyfit((x1l, x2l), (y1l, y2l), 1)
-            horizon_x_left = round((horizon_height - line_params_left[1]) / line_params_left[0])
+                # Tighter thresholds for connecting dotted lines
+                distance_threshold = 30  # pixels (closer together)
+                angle_threshold = 15  # degrees (more similar angles)
 
-            left_line_height = line_params_left[1]
-            right_line_height = line_params_right[0] * self.width + line_params_right[1]
+                distance = np.sqrt((center_x - group_center_x) ** 2 + (center_y - group_center_y) ** 2)
+                angle_diff = abs(angle - group_angle)
 
-            intersection_x = (line_params_right[1] - line_params_left[1]) / (line_params_left[0] - line_params_right[0])
-            intersection_y = intersection_x * line_params_left[0] + line_params_left[1]
+                # Also check if lines are roughly aligned (for dotted line detection)
+                if distance < distance_threshold and angle_diff < angle_threshold:
+                    group.append([x1, y1, x2, y2])
+                    found_group = True
+                    break
 
-            left_weight = max(left_weight, 0.01)
-            right_weight = max(right_weight, 0.01)
+            if not found_group:
+                line_groups.append([[x1, y1, x2, y2]])
 
-            target = ((horizon_x_left + horizon_x_right) / 2) + (left_line_height - right_line_height) * weight_factor + bias
+        # Create purple lines for groups with multiple lines (dotted lines or dense clusters)
+        for group in line_groups:
+            if len(group) >= 2:  # Changed from 3 to 2 for dotted line detection
+                # Sort lines by position to connect them properly
+                group.sort(key=lambda l: (l[1] + l[3]) / 2)  # Sort by average y position
 
-            visuals.extend([
-                {
-                    'type': 'line',
-                    'start': (x1r, y1r),
-                    'end': (x2r, y2r),
-                    'color': (100, 200, 200),
-                    'thickness': 3
-                },
-                {
-                    'type': 'line',
-                    'start': (x1l, y1l),
-                    'end': (x2l, y2l),
-                    'color': (50, 200, 200),
-                    'thickness': 3
-                },
-                {
-                    'type': 'circle',
-                    'center': (round(intersection_x), round(intersection_y)),
-                    'radius': 3,
-                    'color': (210, 200, 200),
-                    'thickness': -1
-                },
-                {
-                    'type': 'circle',
-                    'center': (horizon_x_right, horizon_height),
-                    'radius': 3,
-                    'color': (100, 200, 200),
-                    'thickness': -1
-                },
-                {
-                    'type': 'circle',
-                    'center': (horizon_x_left, horizon_height),
-                    'radius': 3,
-                    'color': (50, 200, 200),
-                    'thickness': -1
-                },
-                {
-                    'type': 'circle',
-                    'center': (int(target), horizon_height),
-                    'radius': 3,
-                    'color': (180, 200, 200),
-                    'thickness': -1
-                }
-            ])
+                # For dotted lines, connect the endpoints
+                if len(group) >= 2:
+                    first_line = group[0]
+                    last_line = group[-1]
 
-        # Add center reference point
-        visuals.append({
-            'type': 'circle',
-            'center': (int(self.width / 2), horizon_height),
-            'radius': 3,
-            'color': (0, 0, 255),
-            'thickness': -1
-        })
+                    # Find the endpoints that are furthest apart
+                    points = [
+                        (first_line[0], first_line[1]), (first_line[2], first_line[3]),
+                        (last_line[0], last_line[1]), (last_line[2], last_line[3])
+                    ]
 
-        return target, visuals
+                    # Find top-most and bottom-most points
+                    top_point = min(points, key=lambda p: p[1])
+                    bottom_point = max(points, key=lambda p: p[1])
+
+                    # Create a line connecting the extremes
+                    clustered_lines.append([int(top_point[0]), int(top_point[1]),
+                                            int(bottom_point[0]), int(bottom_point[1])])
+
+                # Alternative: if you want to fit through all points (for dense clusters)
+                elif len(group) >= 4:  # For very dense clusters, use line fitting
+                    all_points = []
+                    for line in group:
+                        all_points.extend([(line[0], line[1]), (line[2], line[3])])
+
+                    if len(all_points) >= 2:
+                        x_coords = [p[0] for p in all_points]
+                        y_coords = [p[1] for p in all_points]
+
+                        # Fit line: y = mx + b
+                        A = np.vstack([x_coords, np.ones(len(x_coords))]).T
+                        m, b = np.linalg.lstsq(A, y_coords, rcond=None)[0]
+
+                        # Calculate endpoints
+                        y_min = min(y_coords)
+                        y_max = max(y_coords)
+                        x_min = (y_min - b) / m if m != 0 else min(x_coords)
+                        x_max = (y_max - b) / m if m != 0 else max(x_coords)
+
+                        # Clamp to image bounds
+                        x_min = max(0, min(x_min, width))
+                        x_max = max(0, min(x_max, width))
+
+                        clustered_lines.append([int(x_min), int(y_min), int(x_max), int(y_max)])
+
+        return clustered_lines
 
     def processFrame(self, img, horizon_height=280, weight_factor=1, bias=0):
-        """Process a frame to find the line following target with improved wall filtering."""
+        """Main processing function."""
         if img.shape[1] != self.width or img.shape[0] != self.height:
             img = cv2.resize(img, (self.width, self.height))
 
-        # Handle glare in the image
-        img = self.detect_and_handle_glare(img)
-        
+        self.frame_count += 1
         visuals = []
-        
-        # Quick preprocessing - reduce resolution for faster processing
-        small_img = cv2.resize(img, (self.width // 2, self.height // 2))
-        
-        # Apply a tighter mask to focus on the road region only
-        road_mask = np.zeros_like(small_img[:,:,0])
-        center_width = int(small_img.shape[1] * 0.6)  # Focus on central 60%
-        x_start = (small_img.shape[1] - center_width) // 2
-        x_end = x_start + center_width
-        road_mask[:, x_start:x_end] = 255
-        
-        # Display road mask
-        cv2.imshow("1. Road Mask", road_mask)
-        
-        # Apply mask to small image
-        small_masked = cv2.bitwise_and(small_img, small_img, mask=road_mask)
-        
-        # Display masked image
-        cv2.imshow("2. Masked Image", small_masked)
-        
-        # Fast grayscale conversion
-        gray = cv2.cvtColor(small_masked, cv2.COLOR_BGR2GRAY)
-        
-        # Display grayscale image
-        cv2.imshow("3. Grayscale", gray)
-        
-        # Apply direct threshold to isolate white lines - with higher threshold to exclude walls
-        _, binary = cv2.threshold(gray, 190, 255, cv2.THRESH_BINARY)  # Increased from 180 to 190
-        
-        # Display thresholded image
-        cv2.imshow("4. Thresholded", binary)
-        
-        # Focus only on bottom part of image
-        roi_height = int(small_img.shape[0] * 0.5)  # Increased from 0.4 to 0.5
-        binary_roi = binary.copy()
-        binary_roi[:small_img.shape[0] - roi_height, :] = 0
-        
-        # Display ROI image
-        cv2.imshow("5. ROI", binary_roi)
-        
-        # Quick dilation to connect broken lines
-        kernel = np.ones((3, 3), np.uint8)
-        binary_dilated = cv2.dilate(binary_roi, kernel, iterations=1)
-        
-        # Display dilated image
-        cv2.imshow("6. Dilated", binary_dilated)
-        
-        # Direct Hough line detection on binary image
-        lines = cv2.HoughLinesP(
-            binary_dilated,
-            rho=1,
-            theta=np.pi/180,
-            threshold=30,
-            minLineLength=25,  # Increased from 20 to 25
-            maxLineGap=10
-        )
-        
-        # Create visualization of detected lines
-        line_vis = cv2.cvtColor(binary_dilated, cv2.COLOR_GRAY2BGR)
-        if lines is not None:
-            for line in lines:
-                x1, y1, x2, y2 = line[0]
-                cv2.line(line_vis, (x1, y1), (x2, y2), (0, 0, 255), 2)
 
-        # Display lines on binary image
-        cv2.imshow("7. Detected Lines", line_vis)
+        # Step 1: Detect white lines
+        binary = self.detect_white_lines(img)
 
-        # Scale lines back to original size
-        scaled_lines = []
-        if lines is not None:
-            for line in lines:
-                x1, y1, x2, y2 = line[0]
-                scaled_lines.append([x1*2, y1*2, x2*2, y2*2])
+        # Step 2: Detect lines using Hough transform
+        raw_lines = self.detect_lines(binary)
 
-        if scaled_lines:
-            # LESS AGGRESSIVE filtering of lines to exclude walls
-            filtered_lines = []
-            
-            # Create debug visualization for angles
-            debug_vis = np.zeros((self.height, self.width, 3), dtype=np.uint8)
-            
-            for line in scaled_lines:
+        # Step 3: Detect clustered lines (purple lines)
+        clustered_lines = self.detect_clustered_lines(raw_lines, img.shape)
+
+        # Step 4: Filter and separate left/right lines
+        left_lines, right_lines = self.filter_lines(raw_lines, img.shape)
+
+        # Step 5: Get best lines
+        best_left = self.get_best_line(left_lines)
+        best_right = self.get_best_line(right_lines)
+
+        # Step 6: Extrapolate lines
+        if best_left is not None:
+            best_left = self.extrapolate_line(best_left, self.height, horizon_height)
+        if best_right is not None:
+            best_right = self.extrapolate_line(best_right, self.height, horizon_height)
+
+        if enable_debug:
+            # Show all detected lines
+            line_img = img.copy()
+            if raw_lines is not None:
+                for line in raw_lines:
+                    x1, y1, x2, y2 = line[0]
+                    cv2.line(line_img, (x1, y1), (x2, y2), (0, 255, 255), 1)  # Yellow
+
+            # Show clustered lines (purple)
+            for line in clustered_lines:
                 x1, y1, x2, y2 = line
-                
-                # Skip very short lines - less restrictive
-                length = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
-                if length < 30:  # Reduced from 40 to 30
-                    continue
-                    
-                # Only consider lines with appropriate angles
-                dx = x2 - x1
-                dy = y2 - y1
-                if abs(dx) < 1:  # Avoid division by zero
-                    continue
-                    
-                # Calculate angle
-                angle = abs(np.arctan2(dy, dx) * 180 / np.pi)
-                
-                # Color code by angle in debug vis
-                if angle < 60:
-                    color = (0, 0, 255)  # Red for angles < 60
-                elif angle > 120:
-                    color = (255, 0, 0)  # Blue for angles > 120
-                else:
-                    color = (0, 255, 0)  # Green for angles 60-120
-                    
-                cv2.line(debug_vis, (x1, y1), (x2, y2), color, 2)
-                mid_x = (x1 + x2) // 2
-                mid_y = (y1 + y2) // 2
-                cv2.putText(debug_vis, f"{angle:.0f}", (mid_x, mid_y), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-                
-                # Wider angle range to include more potential lane lines
-                if 60 < angle < 120:  # Wider range (was 70-110)
-                    # Less restrictive edge filtering
-                    mid_x = (x1 + x2) / 2
-                    distance_from_edge = min(mid_x, self.width - mid_x)
-                    
-                    # Allow lines closer to edges
-                    if distance_from_edge > (self.width * 0.05):  # Reduced from 10% to 5%
-                        filtered_lines.append(line)
-    
-        # Display debug visualization for angles
-        cv2.imshow("8. Line Angles", debug_vis)
-        
-        # Create visualization of filtered lines
-        filtered_vis = np.zeros((self.height, self.width, 3), dtype=np.uint8)
-        for line in filtered_lines:
-            x1, y1, x2, y2 = line
-            cv2.line(filtered_vis, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        
-        # Display filtered lines
-        cv2.imshow("9. Filtered Lines", filtered_vis)
-        
-        # Split lines into left and right
-        left_lines = []
-        right_lines = []
-        
-        for line in filtered_lines:
-            x1, y1, x2, y2 = line
-            mid_x = (x1 + x2) / 2
-            
-            if mid_x < self.width / 2:
-                left_lines.append(line)
-            else:
-                right_lines.append(line)
-        
+                cv2.line(line_img, (x1, y1), (x2, y2), (128, 0, 128), 3)  # Purple, thick
+
+            # Show filtered lines
+            for line in left_lines:
+                x1, y1, x2, y2 = line
+                cv2.line(line_img, (x1, y1), (x2, y2), (0, 255, 0), 2)  # Green
+            for line in right_lines:
+                x1, y1, x2, y2 = line
+                cv2.line(line_img, (x1, y1), (x2, y2), (255, 0, 0), 2)  # Red
+
+            # Show best lines
+            if best_left is not None:
+                x1, y1, x2, y2 = best_left
+                cv2.line(line_img, (x1, y1), (x2, y2), (0, 255, 0), 4)  # Thick green
+            if best_right is not None:
+                x1, y1, x2, y2 = best_right
+                cv2.line(line_img, (x1, y1), (x2, y2), (255, 0, 0), 4)  # Thick red
+
+            cv2.imshow("6. Lines Detected", line_img)
+
         # Find target
-        if left_lines or right_lines:
+        final_left = [best_left] if best_left is not None else []
+        final_right = [best_right] if best_right is not None else []
+
+        if final_left or final_right:
             target, target_visuals = self.findTarget(
-                left_lines, right_lines, horizon_height, img,
+                final_left, final_right, horizon_height, img,
                 weight_factor=weight_factor, bias=bias
             )
             visuals.extend(target_visuals)
@@ -353,8 +314,87 @@ class LineFollowingNavigation:
 
         return None, visuals
 
+    def findTarget(self, left_lines, right_lines, horizon_height, img, left_weight=1, right_weight=1, weight_factor=1,
+                   bias=0, draw=1):
+        visuals = []
+
+        if not left_lines and not right_lines:
+            return None, visuals
+
+        elif not right_lines:
+            # Only left line detected
+            x1l, y1l, x2l, y2l = left_lines[0]
+            target = x1l + 200  # Estimate right side based on typical lane width
+
+            visuals.append({
+                'type': 'line',
+                'start': (x1l, y1l),
+                'end': (x2l, y2l),
+                'color': (0, 255, 0),
+                'thickness': 3
+            })
+
+        elif not left_lines:
+            # Only right line detected
+            x1r, y1r, x2r, y2r = right_lines[0]
+            target = x1r - 200  # Estimate left side based on typical lane width
+
+            visuals.append({
+                'type': 'line',
+                'start': (x1r, y1r),
+                'end': (x2r, y2r),
+                'color': (255, 0, 0),
+                'thickness': 3
+            })
+
+        else:
+            # Both lines detected
+            x1l, y1l, x2l, y2l = left_lines[0]
+            x1r, y1r, x2r, y2r = right_lines[0]
+
+            # Target is midpoint between the two lines at horizon
+            target = (x1l + x1r) / 2
+
+            visuals.extend([
+                {
+                    'type': 'line',
+                    'start': (x1l, y1l),
+                    'end': (x2l, y2l),
+                    'color': (0, 255, 0),
+                    'thickness': 3
+                },
+                {
+                    'type': 'line',
+                    'start': (x1r, y1r),
+                    'end': (x2r, y2r),
+                    'color': (255, 0, 0),
+                    'thickness': 3
+                }
+            ])
+
+        # Add target point
+        if target is not None:
+            visuals.append({
+                'type': 'circle',
+                'center': (int(target), horizon_height),
+                'radius': 5,
+                'color': (0, 255, 255),
+                'thickness': -1
+            })
+
+        # Add center reference point
+        visuals.append({
+            'type': 'circle',
+            'center': (int(self.width / 2), horizon_height),
+            'radius': 5,
+            'color': (0, 0, 255),
+            'thickness': -1
+        })
+
+        return target, visuals
+
     def calculateSteeringAngle(self, target, mid_point=None):
-        """Calculate steering angle with reduced sensitivity for smoother control."""
+        """Calculate steering angle."""
         if target is None:
             return 0.0
 
@@ -363,102 +403,41 @@ class LineFollowingNavigation:
 
         # Calculate offset from center
         offset = target - mid_point
-        
-        # Add a dead zone to reduce sensitivity to small movements
-        dead_zone = self.width * 0.05  # 5% dead zone
-        if abs(offset) < dead_zone:
-            return 0.0
-        elif offset > 0:
-            offset -= dead_zone
-        else:
-            offset += dead_zone
-            
-        # Use non-linear response for smoother steering
-        normalized_offset = offset / (self.width / 2)
-        steering_factor = (normalized_offset**3 * 0.7) + (normalized_offset * 0.3)
-        
-        # Convert to steering angle
+
+        # Convert to steering angle (simple proportional control)
         max_angle = 30.0
-        steering_angle = steering_factor * max_angle
-        
-        # Limit to max angle
+        steering_angle = (offset / (self.width / 2)) * max_angle
+
+        # Limit angle
         steering_angle = max(min(steering_angle, max_angle), -max_angle)
-        
+
         return steering_angle
 
     def calculateSpeed(self, steering_angle, base_speed=100):
-        """Calculate speed
-
-        Parameters:
-        steering_angle: Current steering angle in degrees
-        base_speed: Base speed value
-
-        Returns:
-        float: Adjusted speed value
-        """
-        # Reduce speed in turns
-        angle_factor = 1.0 - (abs(steering_angle) / 30.0) * 0.5
+        """Calculate speed based on steering angle."""
+        angle_factor = 1.0 - (abs(steering_angle) / 30.0) * 0.3
         speed = base_speed * angle_factor
-
-        return max(speed, base_speed * 0.5)
-
-    def setResolution(self, width, height):
-        self.width = width
-        self.height = height
+        return max(speed, base_speed * 0.6)
 
     def run(self, img, base_speed=100, draw=1):
-        """Run the line following algorithm on a frame.
-
-
-
-        Parameters:
-        img: Input image frame from camera/video
-        base_speed: Base speed value
-        draw: Flag to enable/disable visualization
-
-        Returns:
-        tuple: (steering_angle, speed, visualization image if draw=1)
-        """
-        # Process the frame to find target
-
-        #We only want to use the bottom-half of the image.
-      #  img = img[int(self.height / 2):, :]
-
-
+        """Run the line following algorithm on a frame."""
         target, visuals = self.processFrame(img)
         if visuals is None:
             visuals = []
 
-        # Calculate steering angle
         steering_angle = self.calculateSteeringAngle(target)
-
-        # Calculate speed
         speed = self.calculateSpeed(steering_angle, base_speed)
 
-        # Add steering and speed info to visualization
         if target is not None:
             text = f"Steering: {steering_angle:.1f} | Speed: {speed:.1f}"
-
             visuals.append({
                 'type': 'text',
                 'text': text,
                 'position': (10, 30),
                 'font': 'FONT_HERSHEY_SIMPLEX',
                 'font_scale': 0.7,
-                'color': (0, 0, 255),
+                'color': (255, 255, 255),
                 'thickness': 2
-            })
-
-            center_x = int(self.width / 2)
-            center_y = self.height - 50
-            endpoint_x = center_x + int(steering_angle * 2)
-
-            visuals.append({
-                'type': 'line',
-                'start': (center_x, center_y),
-                'end': (endpoint_x, center_y - 30),
-                'color': (0, 255, 0),
-                'thickness': 3
             })
 
         return steering_angle, speed, visuals
@@ -467,148 +446,3 @@ class LineFollowingNavigation:
         """Process a single frame and return the results."""
         steering_angle, speed, visuals = self.run(frame, base_speed, draw)
         return steering_angle, speed, visuals
-
-    def filterLinesByDistance(self, lines):
-        """A faster implementation to filter lines by distance."""
-        if not lines:
-            return []
-        
-        # Filter by position, prioritizing lines closer to expected lane positions
-        lane_width = self.width * 0.25  # Approximate lane width
-        left_lane_x = self.width / 2 - lane_width / 2
-        right_lane_x = self.width / 2 + lane_width / 2
-        
-        scored_lines = []
-        for line in lines:
-            x1, y1, x2, y2 = line
-            mid_x = (x1 + x2) / 2
-            
-            # Calculate score based on distance to expected lane position
-            left_distance = abs(mid_x - left_lane_x)
-            right_distance = abs(mid_x - right_lane_x)
-            min_distance = min(left_distance, right_distance)
-            
-            # Also consider line length - longer is better
-            length = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
-            
-            # Combined score (lower is better)
-            score = min_distance / length
-            
-            scored_lines.append((line, score))
-        
-        # Sort by score
-        scored_lines.sort(key=lambda x: x[1])
-        
-        # Return the best lines, up to 4
-        return [line for line, _ in scored_lines[:4]]
-
-    def distanceToPosition(self, line, position):
-        """Calculate minimum distance from a line to a position."""
-        x1, y1, x2, y2 = line
-        
-        # Calculate distances from both endpoints to position
-        dist1 = np.sqrt((x1 - position[0])**2 + (y1 - position[1])**2)
-        dist2 = np.sqrt((x2 - position[0])**2 + (y2 - position[1])**2)
-        
-        # Return the minimum distance
-        return min(dist1, dist2)
-
-    def getCustomLines(self, img, binary_mask):
-        """A much faster line detection implementation."""
-        # Convert to grayscale
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        
-        # Apply threshold
-        _, binary = cv2.threshold(gray, 170, 255, cv2.THRESH_BINARY)
-        
-        # Combine with mask
-        masked = cv2.bitwise_and(binary, binary_mask)
-        
-        # Fast Hough transform
-        lines = cv2.HoughLinesP(
-            masked,
-            rho=1,
-            theta=np.pi/180,
-            threshold=20,
-            minLineLength=int(self.scale * 25),
-            maxLineGap=int(self.scale * 15)
-        )
-        
-        if lines is None:
-            return None
-        
-        # Simple filtering
-        filtered_lines = []
-        for line in lines:
-            x1, y1, x2, y2 = line[0]
-            
-            # Skip horizontal lines
-            if abs(y2 - y1) < 10:
-                continue
-                
-            filtered_lines.append(line)
-            
-        return filtered_lines if filtered_lines else None
-
-    def detect_and_handle_glare(self, img):
-        """Detect and reduce glare in the image for better line detection."""
-        # Convert to HSV for better glare detection
-        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-        
-        # Glare typically has high V (brightness) values
-        _, _, v = cv2.split(hsv)
-        
-        # Threshold to find bright areas (potential glare)
-        _, glare_mask = cv2.threshold(v, 220, 255, cv2.THRESH_BINARY)
-        
-        # Dilate to ensure we capture all glare regions
-        kernel = np.ones((5, 5), np.uint8)
-        glare_mask = cv2.dilate(glare_mask, kernel, iterations=1)
-        
-        # Calculate the percentage of the image affected by glare
-        glare_percentage = (np.sum(glare_mask) / 255) / (img.shape[0] * img.shape[1]) * 100
-        
-        # If significant glare is detected, apply correction
-        if glare_percentage > 5:
-            # Create a visualization of detected glare
-            glare_vis = img.copy()
-            glare_vis[glare_mask > 0] = [0, 0, 255]  # Mark glare areas in red
-            cv2.imshow("Glare Detection", glare_vis)
-            
-            # Apply adaptive correction based on glare severity
-            if glare_percentage > 15:
-                # Create mask for non-glare regions (inverse of glare mask)
-                non_glare_mask = cv2.bitwise_not(glare_mask)
-                
-                # Apply a light blur to reduce the effect of glare
-                blurred = cv2.GaussianBlur(img, (15, 15), 0)
-                
-                # Create result by taking original image in non-glare regions
-                # and blurred image in glare regions
-                result = img.copy()
-                result[glare_mask > 0] = blurred[glare_mask > 0]
-                
-                # Adjust contrast in glare regions to improve line detection
-                glare_region = result[glare_mask > 0]
-                if glare_region.size > 0:
-                    # Apply contrast reduction only to glare regions
-                    adjusted = cv2.addWeighted(
-                        glare_region, 0.6, np.zeros_like(glare_region), 0, 30
-                    )
-                    result[glare_mask > 0] = adjusted
-            
-                return result
-            elif glare_percentage > 10:
-                # For moderate glare, just reduce contrast in glare regions
-                result = img.copy()
-                glare_region = result[glare_mask > 0]
-                if glare_region.size > 0:
-                    adjusted = cv2.addWeighted(
-                        glare_region, 0.8, np.zeros_like(glare_region), 0, 20
-                    )
-                    result[glare_mask > 0] = adjusted
-            
-                return result
-    
-        # If no significant glare, return original image
-        return img
