@@ -2,6 +2,7 @@ import cv2
 import logging
 import multiprocessing as mp
 from .line_detection.LineDetection import LineFollowingNavigation
+from .localization.main import frame
 from .object_detection.ObjectDetection import ObjectDetection
 from ...camera.camera_controller import CameraController
 from ...car_variables import CarType, HunterControlMode, KartGearBox, LineDetectionDims
@@ -10,6 +11,8 @@ from ...control_modes.autonomous_mode.object_detection.TrafficDetection import T
 from ...can_interface.bus_connection import connect_to_can_interface, disconnect_from_can_interface
 from ...can_interface.can_factory import select_can_controller_creator, create_can_controller
 from ...util.Render import Renderer
+from .obstacle_avoidance.vehicle_handler import VehicleHandler
+from .obstacle_avoidance.pedestrian_handler import PedestrianHandler
 
 class AutonomousMode(IControlMode):
 
@@ -44,6 +47,9 @@ class AutonomousMode(IControlMode):
         self.location.theta = 0
         self.location.img = None
 
+        self.vehicle_handler = VehicleHandler(weights_path='assets/v5_model.pt', input_source='video', localizer=localization_manager)
+        self.pedestrian_handler = PedestrianHandler(weights_path='assets/v5_model.pt', input_source='video')
+
     def adjust_steering(self, steering_angle):
         new_steering_angle = steering_angle * 576 / 90
         return max(min(new_steering_angle, 576), -576)
@@ -70,6 +76,8 @@ class AutonomousMode(IControlMode):
 
                 saw_red_light = traffic_state['red_light']
                 speed_limit = traffic_state['speed_limit']
+                saw_car = traffic_state['car']
+                saw_pedestrian = traffic_state['person']
 
                 self.renderer.render(top_view)
 
@@ -77,6 +85,17 @@ class AutonomousMode(IControlMode):
                     logging.info("Saw red light, stopping.")
                     self.can_controller.set_steering_and_throttle(0, 0)
                     self.can_controller.set_parking_mode(1)
+                elif saw_car:
+                    logging.info("Saw car, initializing overtake")
+                    self.vehicle_handler.main()
+                    if self.vehicle_handler.goal_reached(threshold=0.1):
+                        logging.info("Overtake completed, returning to original mode")
+                elif saw_pedestrian:
+                    logging.info("Saw person, stopping car")
+                    self.pedestrian_handler.main()
+                    if self.pedestrian_handler.pedestrian_crossed():
+                        logging.info("Pedestrian crossed, continue driving")
+                        self.pedestrian_handler.continue_driving()
                 else:
                     logging.info(f"Speed: {speed}, Steering: {steering_angle}")
                     logging.info(f"X: {self.location.x} Y: {self.location.y} THETA: {self.location.theta}")
