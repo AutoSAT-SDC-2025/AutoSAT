@@ -33,23 +33,22 @@ class VehicleHandler:
         self.collision = False
         self.goal_set = False
         self.path_found = False
+        self.goal = None
 
     def is_actual_waypoint(self, point, waypoints, threshold=0.05):
-        """Check if the point exactly matches a predefined waypoint (allowing tiny float error)."""
         for wp in waypoints:
             if math.hypot(wp[0] - point[0], wp[1] - point[1]) < threshold:
                 return True
         return False
 
     def is_too_close_to_predefined(self, point, waypoints, threshold=0.5):
-        """Check if a point is within threshold of a waypoint — excluding exact match."""
         for wp in waypoints:
             if math.hypot(wp[0] - point[0], wp[1] - point[1]) < threshold:
                 return True
         return False
 
     def set_waypoints(self, x, y):
-        waypoints = [[(-2.5 + x), (3 + y)], [(-2.5 + x), (13 + y)], [(-2 + x), (15+ y)], [(-1 + x), (16 + y)], [(-0.5 + x), (17 + y)]]
+        waypoints = [[-0.25 + x, 1 + y], [-0.5 + x, 1.5 + y], [-0.75 + x, 1.75 + y], [-1 + x, 2 + y], [-1.5 + x, 2.5 + y], [-2 + x, 3 + y], [-2.5 + x, 5 + y], [-2.5 + x, 14 + y], [-2.25 + x, 15 + y], [-2 + x, 16 + y], [-1.5 + x, 16.5 + y], [-1 + x, 17 + y], [-0.75 + x, 17.5 + y], [-0.5 + x, 18 + y]]
         return waypoints
 
     def set_rrt(self, goal, detections, waypoints):
@@ -97,8 +96,8 @@ class VehicleHandler:
                 if self.is_actual_waypoint([node.x, node.y], waypoints) or not self.is_too_close_to_predefined([node.x, node.y], waypoints):
                     filtered_path.append(node)
 
-            x_vals = [node.x for node in filtered_path]
-            y_vals = [node.y for node in filtered_path]
+            x_vals = [node.x if hasattr(node, "x") else node[0] for node in filtered_path]
+            y_vals = [node.y if hasattr(node, "y") else node[1] for node in filtered_path]
             return x_vals, y_vals
 
     def set_goal(self, det, x, y, theta):
@@ -139,13 +138,20 @@ class VehicleHandler:
     def calculate_angle(self, x, y, waypoint):
         dx = waypoint[0] - x
         dy = waypoint[1] - y
-        angle = math.atan2(dy,dx)
+        angle = math.atan2(dy, dx)
         return angle
 
     def angle_difference(self, desired_theta, current_theta):
         diff = desired_theta - current_theta
-        angle_difference = (diff + math.pi) % (2 * math.pi) - math.pi  # Normalize to [-π, π]
-        return angle_difference
+        return -((diff + math.pi) % (2 * math.pi) - math.pi)
+
+    def set_steering_angle(self, angle_difference):
+        max_steering_angle = 100
+        gain = 180 / math.pi
+        steering_command = int(gain * angle_difference)
+        steering_command = max(-max_steering_angle, min(max_steering_angle, steering_command))
+        print(f"Steering angle diff (rad): {angle_difference:.2f}, Command: {steering_command}")
+        self.can_controller.set_steering_and_throttle(steering_command, 300)
 
     def steer_toward_waypoint(self, waypoint):
         current_x = self.localizer.x
@@ -154,16 +160,7 @@ class VehicleHandler:
 
         desired_theta = self.calculate_angle(current_x, current_y, waypoint)
         angle_diff = self.angle_difference(desired_theta, current_theta)
-
-        if abs(angle_diff) < math.radians(5):
-            print("Driving straight")
-            self.can_controller.set_steering_and_throttle(0, 300)
-        elif angle_diff > 0:
-            print("Turning right")
-            self.can_controller.set_steering_and_throttle(100, 300)
-        else:
-            print("Turning left")
-            self.can_controller.set_steering_and_throttle(-100, 300)
+        self.set_steering_angle(angle_diff)
 
     def plot_waypoints(self, goal, detections, x_vals, y_vals):
         x = self.localizer.x
@@ -174,7 +171,6 @@ class VehicleHandler:
         plt.scatter([x_vals[0]], [y_vals[0]], color='green', label='Start')
         plt.scatter([goal[0]], [goal[1]], color='red', label='Goal')
 
-        # Plot obstacles (optional, if you want to visualize them)
         for ox, oy, width, height in obstacles:
             rect = plt.Rectangle((ox, oy), width, height, color='gray', alpha=0.5)
             plt.gca().add_patch(rect)
@@ -223,7 +219,7 @@ class VehicleHandler:
         return closest_distance
 
     def check_collision(self, closest_distance):
-        if closest_distance < 0.5:
+        if closest_distance < 500:
             print("Collision detected, stopping the car")
             self.can_controller.set_steering_and_throttle(0, 0)
             self.collision = True
@@ -242,11 +238,12 @@ class VehicleHandler:
             y = self.localizer.y
             theta = self.localizer.theta
 
-            for scan in self.iter_scans():
+            try:
+                scan = next(self.iter_scans())
                 closest_distance = self.determine_closest(scan)
-                if self.check_collision(closest_distance):
-                    print("Collision detected, stopping the car")
-                    break
+                self.check_collision(closest_distance)
+            except StopIteration:
+                pass
 
             for det in detections:
                 x1, y1, x2, y2 = det['bbox']
@@ -255,50 +252,45 @@ class VehicleHandler:
                 cv2.putText(frame, label, (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-                if det["class"] == "Car" and det["distance"] <= 8 and self.goal_set is False:
+                if det["class"] == "Car" and det["distance"] <= 8 and not self.goal_set:
                     self.goal = self.set_goal(det, x, y, theta)
                     self.goal_set = True
+
                     if self.goal:
                         waypoints = self.set_waypoints(x, y)
                         result = self.set_rrt(self.goal, detections, waypoints)
                         if result:
                             self.x_vals, self.y_vals = result
+                            self.plot_waypoints(self.goal, detections, self.x_vals, self.y_vals)
                             self.path_found = True
                             self.detections = detections
 
             cv2.imshow('Detection', frame)
 
             if not self.collision:
-                if self.goal_set and self.path_found:
-                    if self.x_vals and self.y_vals:
-                        x_wp, y_wp = self.x_vals[0], self.y_vals[0]
-                        if self.waypoint_reached(x_wp, y_wp):
-                            print("Waypoint reached.")
-                            self.x_vals.pop(0)
-                            self.y_vals.pop(0)
-                            continue
-                        elif len(self.x_vals) > 0:
-                            self.steer_toward_waypoint((x_wp, y_wp))
+                if self.goal_set and self.path_found and self.x_vals and self.y_vals:
+                    x_wp, y_wp = self.x_vals[0], self.y_vals[0]
+
+                    if self.waypoint_reached(x_wp, y_wp):
+                        print("Waypoint reached.")
+                        self.x_vals.pop(0)
+                        self.y_vals.pop(0)
+                        continue
+
+                    self.steer_toward_waypoint((x_wp, y_wp))
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
+
             if self.goal_set and self.path_found and not self.x_vals:
                 if self.goal_reached():
                     print("Final goal reached!")
+                    self.can_controller.set_steering_and_throttle(0, 0)
                     break
 
         self.cam.release()
         cv2.destroyAllWindows()
 
-        if self.goal_set and self.path_found and self.x_vals and self.y_vals:
-            x_wp, y_wp = self.x_vals[0], self.y_vals[0]
-
-            if self.waypoint_reached(x_wp, y_wp):
-                print("Waypoint reached.")
-                self.x_vals.pop(0)
-                self.y_vals.pop(0)
-            else:
-                self.steer_toward_waypoint((x_wp, y_wp))
 
 if __name__ == '__main__':
     weights_path = "assets/v5_model.pt"
