@@ -118,8 +118,6 @@ class DataLoggerManager:
     def __log_camera_frames(self):
         while self.enabled:
             camera_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")[:-3]
-            # self.camera_controller.capture_camera_frames()
-
             try:
                 front_frame = self.camera_controller.get_front_view()
                 if front_frame is not None:
