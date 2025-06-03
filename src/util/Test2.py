@@ -79,15 +79,18 @@ def main(weights_path: str, input_source: str, image_folder: str):
 
     cv2.destroyAllWindows()
 
-
 if __name__ == '__main__':
+    script_dir = os.path.dirname(os.path.abspath(__file__))
 
-    path = 'D:/gebruiker/Desktop/Test-Data/'
-    # ask for which camera (stitched, front, topdown, left, right)
     inp = input("Enter camera type (stitched, front, topdown, left, right): ").strip().lower()
     if inp not in ['stitched', 'front', 'topdown', 'left', 'right']:
         print("Invalid camera type. Defaulting to stitched.")
         inp = 'stitched'
 
-   #todo: kalman checkout
-    main('assets/v5_model.pt', 'images', path + inp + '/')
+    # FIX: Only go up 2 levels to get to AutoSAT root
+    project_root = os.path.abspath(os.path.join(script_dir, '..', '..'))
+    image_folder = os.path.join(project_root, 'assets', 'data', inp)
+    weights_path = os.path.join(project_root, 'assets', 'v5_model.pt')
+
+    print("Image folder:", image_folder)
+    main(weights_path, 'images', image_folder)
