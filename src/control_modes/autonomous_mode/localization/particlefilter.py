@@ -50,14 +50,15 @@ class ParticleFilter:
         self.particles[:,2] = wrap_to_pi(self.particles[:,2])
         
     def update_particles(self, v, dtheta, std=None) -> None:
-        std = [100, 0.01]
-        noise = self.generator.normal(0, std, (self.amount, 2))
-        # difference = np.tile([dx, dy, dtheta], (self.amount, 1))
-        self.particles[:,2] = self.particles[:, 2] + noise[:,1] + dtheta
+        noise = self.generator.normal(0, self.std, (self.amount, 3))
+        noise_x = np.sin(self.particles[:, 2])*noise[:,1] + np.cos(self.particles[:, 2])*noise[:,0]
+        noise_y = np.sin(self.particles[:, 2])*noise[:,0] + np.cos(self.particles[:, 2])*noise[:,1]
+        
+        self.particles[:,2] = self.particles[:, 2] + noise[:,2] + dtheta
         self.particles[:,2] = wrap_to_pi(self.particles[:,2])
-        v = np.tile([v], (self.amount)) + noise[:,0]
-        self.particles[:,0] = -np.sin(self.particles[:, 2])*v + self.particles[:,0]
-        self.particles[:,1] = np.cos(self.particles[:, 2])*v + self.particles[:,1]
+        
+        self.particles[:,0] = -np.sin(self.particles[:, 2])*v + self.particles[:,0] + noise_x
+        self.particles[:,1] = np.cos(self.particles[:, 2])*v + self.particles[:,1] + noise_y
 
     def spawn_new_particles(self, x, y, theta) -> None:
         self.particles = np.tile([x, y, theta], (self.amount, 1))

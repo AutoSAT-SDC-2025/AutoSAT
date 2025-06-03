@@ -135,7 +135,10 @@ class Localizer:
         if lane is None:
             return
         # self.particle_filter.update(lane, dx, dy, dtheta)
-        self.particle_filter.update(lane, translation[1][0], dtheta)
+        # v = np.sqrt(translation[1][0]**2 + translation[0][0]**2)
+        # v = np.sqrt((translation[1][0]*1.1)**2 + translation[0][0]**2)
+        v = translation[1][0]
+        self.particle_filter.update(lane, v, dtheta)
         self.set_location(self.particle_filter.x, self.particle_filter.y, self.particle_filter.theta)
             
     def preprocess(self, img: np.array):
