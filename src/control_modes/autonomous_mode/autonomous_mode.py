@@ -1,58 +1,33 @@
-import os
 import cv2
 import logging
 import multiprocessing as mp
-from abc import ABC
-from datetime import datetime
-
-from src.util.video import get_camera_config, validate_camera_config
-from src.multi_camera_calibration import CalibrationData, RenderDistance
 from .line_detection.LineDetection import LineFollowingNavigation
 from .object_detection.ObjectDetection import ObjectDetection
-from ...car_variables import CarType, HunterControlMode, KartGearBox
+from ...camera.camera_controller import CameraController
+from ...car_variables import CarType, HunterControlMode, KartGearBox, LineDetectionDims
 from ...control_modes.IControlMode import IControlMode
 from ...control_modes.autonomous_mode.object_detection.TrafficDetection import TrafficManager
 from ...can_interface.bus_connection import connect_to_can_interface, disconnect_from_can_interface
 from ...can_interface.can_factory import select_can_controller_creator, create_can_controller
 from ...util.Render import Renderer
 
-WIDTH = 848
-HEIGHT = 480
+class AutonomousMode(IControlMode):
 
-LineDetectionDims = {
-    'width': 720,
-    'height': 720
-}
+    def __init__(self, car_type: CarType, use_checkpoint_mode=False, camera_controller = None):
+        self.camera_controller = camera_controller
+        if self.camera_controller is None:
+            try:
+                self.camera_controller = CameraController()
+                self.camera_controller.enable_cameras()
+                self.camera_controller.setup_cameras()
+            except Exception as e:
+                logging.error(f"Error initializing camera controller: {e}")
+                self.camera_controller = None
 
-
-class AutonomousMode(IControlMode, ABC):
-
-    def __init__(self, car_type: CarType, use_checkpoint_mode=False):
-        self.data = CalibrationData(
-            path="assets/calibration/latest.npz",
-            input_shape=(1920, 1080),
-            output_shape=(LineDetectionDims['width'], LineDetectionDims['height']),
-            render_distance=RenderDistance(
-                front=12.0,
-                sides=6.0
-            )
-        )
-
-        user_input = input("Do you want to save frames? (y/n): ").strip().lower()
-        self.save_frames = user_input == 'y' or user_input == 'yes'
-
-        if self.save_frames:
-            now = datetime.now().strftime("%-d-%-m-%Y %H:%M")  # adjust %-d to %d on Windows
-            self.frame_save_dir = os.path.join("recorded", now)
-            os.makedirs(self.frame_save_dir, exist_ok=True)
-            self.frame_counter = 1
-
-        self.captures = {}
         self.car_type = car_type
         self.can_bus = connect_to_can_interface(0)
         self.can_creator = select_can_controller_creator(self.car_type)
         self.can_controller = create_can_controller(self.can_creator, self.can_bus)
-        self.cams = get_camera_config()
 
         self.car_seen_counter = 0
         self.car_on_left = False
@@ -69,63 +44,12 @@ class AutonomousMode(IControlMode, ABC):
         self.location.theta = 0
         self.location.img = None
 
-    def setup_cameras(self):
-        self.captures = {}
-        for cam_name in ['left', 'front', 'right']:
-            print("Attempting to setup camera: ", cam_name)
-            cam_path = self.cams[cam_name]
-            cap = cv2.VideoCapture(cam_path)
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
-
-            if not cap.isOpened():
-                raise RuntimeError(f"Failed to open {cam_name} camera at {cam_path}")
-
-            for _ in range(2):  # Warm-up camera
-                cap.read()
-
-            self.captures[cam_name] = cap
-            print("Completed camera setup for ", cam_name, " at ", cam_path)
-
-    def capture(self):
-        frames = {}
-        for cam_name, cap in self.captures.items():
-            ret, frame = cap.read()
-            if not ret:
-                raise RuntimeError(f"Failed to read frame from {cam_name} camera.")
-            frames[cam_name] = frame
-
-        try:
-            print("Stitching frames...")
-            top_down = self.data.transform([frames['left'], frames['front'], frames['right']])
-        except Exception as e:
-            raise RuntimeError(f"Stitching error: {e}")
-
-        front_frame = frames['front']
-        self.location.img = front_frame
-        front_frame = cv2.resize(front_frame, (WIDTH, HEIGHT))
-
-        if self.save_frames:
-            frame_dir = os.path.join(self.frame_save_dir, str(self.frame_counter))
-            os.makedirs(frame_dir, exist_ok=True)
-
-            for cam_name, frame in frames.items():
-                cv2.imwrite(os.path.join(frame_dir, f"{cam_name}.jpg"), frame)
-            cv2.imwrite(os.path.join(frame_dir, "stitched.jpg"), top_down)
-            cv2.imwrite(os.path.join(frame_dir, "front_resized.jpg"), front_frame)
-
-            self.frame_counter += 1
-
-        return top_down, front_frame
-
     def adjust_steering(self, steering_angle):
         new_steering_angle = steering_angle * 576 / 90
         return max(min(new_steering_angle, 576), -576)
 
     def start(self):
         logging.info("Starting autonomous mode...")
-        self.setup_cameras()
-
         try:
             self.can_controller.start()
             if self.car_type == CarType.kart:
@@ -133,11 +57,9 @@ class AutonomousMode(IControlMode, ABC):
             elif self.car_type == CarType.hunter:
                 self.can_controller.set_control_mode(HunterControlMode.command_mode)
 
-            if not validate_camera_config(self.cams):
-                raise RuntimeError("No cameras connected or invalid camera configuration")
-
             while True:
-                top_view, front_view = self.capture()
+                top_view = self.camera_controller.get_top_view()
+                front_view = self.camera_controller.get_front_view()
                 self.renderer.clear()
 
                 steering_angle, speed, line_visuals = self.nav.process(top_view)
@@ -172,14 +94,13 @@ class AutonomousMode(IControlMode, ABC):
 
     def stop(self) -> None:
         logging.info("Stopping autonomous mode.")
-        for cap in (self.captures or {}).values():
-            cap.release()
-
+        self.camera_controller.disable_cameras()
+        self.camera_controller = None
         if self.car_type == CarType.hunter:
             self.can_controller.set_control_mode(HunterControlMode.idle_mode)
         else:
             self.can_controller.set_kart_gearbox(KartGearBox.neutral)
             self.can_controller.set_break(100)
-
+        self.can_controller.stop()
         cv2.destroyAllWindows()
         disconnect_from_can_interface(self.can_bus)

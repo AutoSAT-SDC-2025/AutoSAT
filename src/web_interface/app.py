@@ -135,12 +135,21 @@ class CameraManager:
             self.clients.remove(websocket)
 
 class ControlManager:
-    def __init__(self):
+    def __init__(self, camera_controller = None):
         self.mode = None
         self.car_type = None
         self.controller = None
         self.controller_thread = None
         self.running = False
+        self.camera_controller = camera_controller
+        if self.camera_controller is None:
+            try:
+                self.camera_controller = CameraController()
+                self.camera_controller.enable_cameras()
+                self.camera_controller.setup_cameras()
+            except Exception as e:
+                logging.error(f"Error initializing camera controller: {e}")
+                self.camera_controller = None
 
     def set_mode(self, mode):
         """Set the control mode"""
@@ -184,7 +193,7 @@ class ControlManager:
                 self.controller = ManualMode(self.car_type)
             else:
                 logger.info("Starting autonomous mode...")
-                self.controller = AutonomousMode(self.car_type)
+                self.controller = AutonomousMode(self.car_type, self.camera_controller)
 
             setup_listeners(self.controller.can_controller, self.car_type)
             logger.info(f"CAN listeners registered for {self.car_type} controller")
@@ -218,9 +227,12 @@ class ControlManager:
 
         try:
             self.controller.stop()
+            self.camera_controller.disable_cameras()
             self.running = False
             self.controller = None
+            self.camera_controller = None
             logger.info("Controller stopped")
+            logger.info("CameraController stopped")
             return True
         except Exception as e:
             logger.error(f"Error stopping controller: {e}")
@@ -236,7 +248,7 @@ class ControlManager:
 
 camera_manager = CameraManager()
 camera_manager.start()
-control_manager = ControlManager()
+control_manager = ControlManager(camera_manager.camera_controller)
 data_logger_manager = DataLoggerManager(camera_manager.camera_controller)
 
 @asynccontextmanager
