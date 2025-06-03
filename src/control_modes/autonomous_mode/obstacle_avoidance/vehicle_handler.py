@@ -254,7 +254,7 @@ class VehicleHandler:
                 cv2.putText(frame, label, (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-                if det["class"] == "Car" and det["distance"] <= 8 and not self.goal_set:
+                if det["class"] == "Car" and det["distance"] <= 10 and not self.goal_set:
                     self.goal = self.set_goal(det, x, y, theta)
                     self.goal_set = True
 
@@ -263,7 +263,7 @@ class VehicleHandler:
                         result = self.set_rrt(self.goal, detections, waypoints)
                         if result:
                             self.x_vals, self.y_vals = result
-                            self.plot_waypoints(self.goal, detections, self.x_vals, self.y_vals)
+                            #self.plot_waypoints(self.goal, detections, self.x_vals, self.y_vals)
                             self.path_found = True
                             self.detections = detections
 
