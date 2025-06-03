@@ -50,8 +50,8 @@ class ManualMode(IControlMode):
 
     def handle_park(self, value):
         """Callback for parking trigger"""
-        trigger_threshold = 0.8
-        self.park = True if value < trigger_threshold else False
+        trigger_threshold = -0.8
+        self.park = True if value > trigger_threshold else False
 
     def start(self) -> None:
         """Start manual mode."""
@@ -83,6 +83,7 @@ class ManualMode(IControlMode):
         else:
             self.can_controller.set_kart_gearbox(KartGearBox.neutral)
             self.can_controller.set_break(100)
+        self.can_controller.stop()
         disconnect_from_can_interface(self.can_bus)
         logging.info("Exiting... \nStopping manual mode")
 
