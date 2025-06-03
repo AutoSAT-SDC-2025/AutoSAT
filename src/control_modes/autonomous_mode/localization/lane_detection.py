@@ -1,4 +1,4 @@
-#from os import wait
+from os import wait
 from typing import Any
 import cv2 as cv
 import numpy as np
@@ -10,8 +10,8 @@ class LaneDetector():
         current_file = Path(__file__).resolve()
         project_root = current_file.parents[3]  # adjust this number as needed
         config = configparser.ConfigParser()
-        config.read(project_root/"configs"/"configs.ini")
-        self.pmatrix = np.load(config["LaneDetection"]["transformation"])
+        config.read(project_root/"config"/"config.ini")
+        self.pmatrix = np.load(project_root/config["LaneDetection"]["transformation"])
 
     
     def __call__(self, img: np.array) -> Any:

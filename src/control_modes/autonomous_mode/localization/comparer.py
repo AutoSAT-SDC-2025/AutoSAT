@@ -79,7 +79,7 @@ class Comparitor:
 
     def trust_score(self, img):
         """Return a score between 0 and 1"""
-        print(np.sum(img))
+        # print(np.sum(img))
         return min(np.sum(img)/113636, 1)
 
     

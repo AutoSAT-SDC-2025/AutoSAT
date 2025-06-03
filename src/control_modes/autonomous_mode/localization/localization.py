@@ -1,4 +1,4 @@
-#from os import wait
+from os import wait
 import cv2 as cv
 import numpy as np
 from .keypointmatcher import StarKeyPointMatcher
@@ -15,8 +15,8 @@ class Localizer:
         current_file = Path(__file__).resolve()
         project_root = current_file.parents[3]  # adjust this number as needed
         config = configparser.ConfigParser()
-        config.read(project_root/"configs"/"configs.ini")
-        self.perspective_matrix = np.load(config["Localizer"]["transformation"])
+        config.read(project_root/"config"/"config.ini")
+        self.perspective_matrix = np.load(project_root/config["Localizer"]["transformation"])
         self.width = int(config["Localizer"]["width"])
         self.height = int(config["Localizer"]["height"])
         self.scale = float(config["Localizer"]["scale"])
@@ -33,7 +33,7 @@ class Localizer:
 
         self.rotation = np.eye(2, dtype=np.float32)
         self.initialized = False
-        self.method = 0
+        self.method = 1
 
         vars(self).update(kwargs)
     
@@ -57,7 +57,6 @@ class Localizer:
         src_points = np.array([keypoints1[match_object.queryIdx].pt for match_object in match_objects], dtype=np.float32)
         dst_points = np.array([keypoints2[match_object.trainIdx].pt for match_object in match_objects], dtype=np.float32)
         
-        print(self.transform_estimator)
         rot, translation, inliers = self.transform_estimator.estimate_transformation(dst_points, src_points)
         if translation is None:
             return None
@@ -67,7 +66,7 @@ class Localizer:
             return rot, translation, inliers
 
     def update_location(self, rot, translation):
-        theta = (np.arctan2(rot[1, 0], rot[0, 0]))
+        theta = -(np.arctan2(rot[1, 0], rot[0, 0]))
         rot = np.array([
             [np.cos(theta), -np.sin(theta)],
             [np.sin(theta), np.cos(theta)]
@@ -77,6 +76,7 @@ class Localizer:
         self.rotation = rot @ self.rotation
         self.theta = (np.arctan2(self.rotation[1, 0], self.rotation[0, 0]))
 
+        translation[1][0] = translation[1][0]*1.1
         self.translation = translation
 
         if self.method == 0:
@@ -124,7 +124,9 @@ class Localizer:
         img = cv.warpPerspective(img, self.perspective_matrix, (self.width, self.height))
         img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         img = cv.GaussianBlur(img,(5,5),0)
+        # img = cv.GaussianBlur(img,(15,15),0)
         img = cv.resize(img, None, fx=self.scale, fy=self.scale, interpolation= cv.INTER_LINEAR)
+        cv.imshow("Localization topdown view", img)
         return img
 
 def localization_worker(shared):
@@ -132,9 +134,11 @@ def localization_worker(shared):
     lane_detector = LaneDetector()
     img = None
     while True:
-        if shared.img != img:
-            img = shared.img
-            lane = lane_detector(img)
+        if not np.array_equal(shared.img, img):
+            img = shared.img.copy()
+            frame = cv.resize(img, (848, 480))
+            lane = lane_detector(frame)
+            cv.imshow("lane", lane)
             localizer.update(img, lane)
             shared.x = localizer.x
             shared.y = localizer.y

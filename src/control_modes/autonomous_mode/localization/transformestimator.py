@@ -49,7 +49,7 @@ class TransformAngleEstimator:
             return None, None, None
         
         affinemtx, inliers = cv.estimateAffinePartial2D(original_points, transformed_points)
-        inliers = np.reshape(inliers, shape=(len(inliers))).astype(bool)
+        inliers = np.reshape(inliers, newshape=(len(inliers))).astype(bool)
 
         dx = affinemtx[0,2]*self.scale
         dy = affinemtx[1,2]*self.scale
