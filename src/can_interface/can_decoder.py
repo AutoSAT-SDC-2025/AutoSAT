@@ -7,6 +7,8 @@ from can import Message
 from ..car_variables import HunterFeedbackCanIDs, KartFeedbackCanIDs
 from ..web_interface.websocket_manager import sync_broadcast_can_json
 
+#TODO: decode messages send asw <3 for both kart and hunter/AVSAT
+
 @dataclass
 class CanMessageData:
     type: str = "unknown"
