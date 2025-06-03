@@ -18,7 +18,6 @@ class PedestrianHandler:
             self.lidar = RPLidar("Com3")
         except:
             self.lidar = RPLidar("/dev/ttyUSB0")
-        #self.scan_merging = ScanMerging(weights_path, input_source)
         self.object_detection = ObjectDetection(weights_path, input_source)
         self.cam = cv2.VideoCapture(1)
         self.person_distance_threshold = 2

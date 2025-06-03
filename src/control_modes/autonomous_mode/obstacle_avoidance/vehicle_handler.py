@@ -145,13 +145,15 @@ class VehicleHandler:
         diff = desired_theta - current_theta
         return -((diff + math.pi) % (2 * math.pi) - math.pi)
 
+    def adjust_steering(self, steering_angle):
+        new_steering_angle = steering_angle * 576 / 90
+        return max(min(new_steering_angle, 576), -576)
+
     def set_steering_angle(self, angle_difference):
-        max_steering_angle = 100
-        gain = 180 / math.pi
-        steering_command = int(gain * angle_difference)
-        steering_command = max(-max_steering_angle, min(max_steering_angle, steering_command))
-        print(f"Steering angle diff (rad): {angle_difference:.2f}, Command: {steering_command}")
-        self.can_controller.set_steering_and_throttle(steering_command, 300)
+        angle_in_degrees = math.degrees(angle_difference)
+        new_steering_angle = self.adjust_steering(angle_in_degrees)
+        print(f"Steering angle diff (deg): {angle_in_degrees:.2f}, Command: {new_steering_angle:.2f}")
+        self.can_controller.set_steering_and_throttle(new_steering_angle, 300)
 
     def steer_toward_waypoint(self, waypoint):
         current_x = self.localizer.x
