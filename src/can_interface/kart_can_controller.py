@@ -15,8 +15,6 @@ class KartCANController(ICanController):
         self.can_bus = bus
         self.__listeners = {}
 
-        self.__thread = threading.Thread(target=self.__listen, daemon=True)
-
         self.__kart_gearbox = KartGearBox.neutral
         self.__steering_angle = 0.0
         self.__throttle_value = 0.0
@@ -36,6 +34,11 @@ class KartCANController(ICanController):
             self.__listeners[message_id] = []
         self.__listeners[message_id].append(listener)
 
+    def start(self) -> None:
+        self.__thread = threading.Thread(target=self.__listen, daemon=True)
+        self.__thread.start()
+        logging.debug("created task for __listen")
+
     def set_steering(self, steering_angle: float) -> None:
         if steering_angle == self.__steering_angle:
             return
@@ -53,6 +56,10 @@ class KartCANController(ICanController):
     def set_throttle(self, throttle_value: float) -> None:
         if throttle_value == self.__throttle_value:
             return
+        if throttle_value < 0.0:
+            self.__throttle_value = throttle_value
+            self.__throttle_message.data = [int(-throttle_value), 0, self.__kart_gearbox.backward, 0, 0, 0, 0, 0]
+            self.__throttle_task.modify_data(self.__throttle_message)
         self.__throttle_value = throttle_value
         self.__throttle_message.data = [int(throttle_value), 0, self.__kart_gearbox.value, 0, 0, 0, 0, 0]
         self.__throttle_task.modify_data(self.__throttle_message)
@@ -64,9 +71,9 @@ class KartCANController(ICanController):
         self.__breaking_message.data[0] = break_value
         self.__breaking_task.modify_data(self.__breaking_message)
 
-    def start(self) -> None:
-        self.__thread.start()
-        logging.debug("created task for __listen")
+    def stop(self) -> None:
+        if self.__thread and self.__thread.is_alive():
+            self.__thread.join()
 
     def __listen(self) -> None:
         while True:
