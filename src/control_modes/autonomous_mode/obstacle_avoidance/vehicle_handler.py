@@ -4,6 +4,7 @@ from ....can_interface.can_factory import select_can_controller_creator, create_
 from src.util.video import get_camera_config
 from ..localization.localization import Localizer
 from ..object_detection.Detection import ObjectDetection
+from ..line_detection.LineDetection import LineFollowingNavigation
 
 from rplidar import RPLidar
 from math import floor
@@ -23,6 +24,7 @@ class VehicleHandler:
         self.can_controller = create_can_controller(self.can_creator, self.can_bus)
         self.cams = get_camera_config()
         self.object_detection = ObjectDetection(weights_path, input_source)
+        self.lane_navigator = LineFollowingNavigation()
         self.cam = cv2.VideoCapture(1)
         try: self.lidar = RPLidar("COM3")
         except: self.lidar = RPLidar("/dev/ttyUSB0")
@@ -48,7 +50,7 @@ class VehicleHandler:
         return False
 
     def set_waypoints(self, x, y):
-        waypoints = [[-0.25 + x, 1 + y], [-0.5 + x, 1.5 + y], [-0.75 + x, 1.75 + y], [-1 + x, 2 + y], [-1.5 + x, 2.5 + y], [-2 + x, 3 + y], [-2.5 + x, 5 + y], [-2.5 + x, 14 + y], [-2.25 + x, 15 + y], [-2 + x, 16 + y], [-1.5 + x, 16.5 + y], [-1 + x, 17 + y], [-0.75 + x, 17.5 + y], [-0.5 + x, 18 + y]]
+        waypoints = [[-0.25 + x, 0.75 + y], [-0.5 + x, 1 + y], [-0.75 + x, 1.25 + y], [-1 + x, 1.5 + y], [-1.5 + x, 1.75 + y], [-2 + x, 2 + y], [-2.25 + x, 2.5 + y], [-2.5 + x, 3 + y], [-2.5 + x, 14 + y], [-2.25 + x, 15 + y], [-2 + x, 16 + y], [-1.5 + x, 16.5 + y], [-1 + x, 17 + y], [-0.75 + x, 17.5 + y], [-0.5 + x, 18 + y]]
         return waypoints
 
     def set_rrt(self, goal, detections, waypoints):
@@ -240,6 +242,11 @@ class VehicleHandler:
             y = self.localizer.y
             theta = self.localizer.theta
 
+            steering_angle, lateral_distance, x_center = self.lane_navigator.process(frame)
+            lane_width = 3
+            scaling_factor = lane_width / 2
+            lane_center_offset = (x_center - (self.image_width / 2)) / self.image_width * scaling_factor
+
             try:
                 scan = next(self.iter_scans())
                 closest_distance = self.determine_closest(scan)
@@ -259,7 +266,16 @@ class VehicleHandler:
                     self.goal_set = True
 
                     if self.goal:
-                        waypoints = self.set_waypoints(x, y)
+                        target_theta = 0
+                        correction_distance = 2.0
+
+                        x_corrected = x - lane_center_offset
+
+                        x_aligned = x_corrected + correction_distance * math.cos(target_theta)
+                        y_aligned = y + correction_distance * math.sin(target_theta)
+
+                        lane_center_wp = [x_aligned, y_aligned]
+                        waypoints = [lane_center_wp] + self.set_waypoints(x, y)
                         result = self.set_rrt(self.goal, detections, waypoints)
                         if result:
                             self.x_vals, self.y_vals = result
