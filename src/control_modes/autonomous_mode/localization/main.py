@@ -46,7 +46,7 @@ frame = cv.undistort(frame, K, None)
 # print(frame.shape)
 # exit()
 localizer = Localizer()
-localizer.set_start_location(x, y, theta)
+# localizer.set_start_location(x, y, theta)
 gframe = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
 # mask = cv.warpPerspective(np.ones_like(gframe), B, dsize=(frame.shape[1]+1200, frame.shape[0]+500))
 
@@ -80,6 +80,10 @@ while cap.isOpened():
     map_input = cv.resize(localizer.mapper.get_sight((localizer.x, localizer.y), localizer.theta), (128, 64))
     cv.imshow("map_input", map_input)
     cv.imshow("map", localizer.mapper.get_map_with_car(localizer.x,localizer.y,localizer.theta))
+    x_list = localizer.particle_filter.particles[:,0]
+    y_list = localizer.particle_filter.particles[:,1]
+    theta_list = localizer.particle_filter.particles[:,2]
+    cv.imshow("particles", localizer.mapper.get_map_with_particles(x_list, y_list, theta_list))
 
     if mapping is True:
         mapper.update_car_location(lane, (int(localizer.x), int(localizer.y)), localizer.rotation, mask)

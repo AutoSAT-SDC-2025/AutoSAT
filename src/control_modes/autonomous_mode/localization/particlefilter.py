@@ -27,7 +27,7 @@ class ParticleFilter:
         self.kalman = KalmanFilter()
 
 
-    def update_particles(self, dx, dy, dtheta, std=None) -> None:
+    def _update_particles(self, dx, dy, dtheta, std=None) -> None:
         if std is None:
             std = np.zeros(3)
             std[0] = np.abs(self.std[1]*np.sin(self.theta)) + np.abs(self.std[0]*np.cos(self.theta)) # x
@@ -37,6 +37,28 @@ class ParticleFilter:
         difference = np.tile([dx, dy, dtheta], (self.amount, 1))
         self.particles = self.particles + noise + difference
         self.particles[:,2] = wrap_to_pi(self.particles[:,2])
+
+    # def update_particles(self, dx, dy, dtheta, std=None) -> None:
+    #     if std is None:
+    #         std = np.zeros(3)
+    #         std[0] = np.abs(self.std[1]*np.sin(self.theta)) + np.abs(self.std[0]*np.cos(self.theta)) # x
+    #         std[1] = np.abs(self.std[0]*np.sin(self.theta)) + np.abs(self.std[1]*np.cos(self.theta)) # y
+    #         std[2] = self.std[2]
+    #     noise = self.generator.normal(0, std, (self.amount, 3))
+    #     difference = np.tile([dx, dy, dtheta], (self.amount, 1))
+    #     self.particles = self.particles + noise + difference
+        self.particles[:,2] = wrap_to_pi(self.particles[:,2])
+        
+    def update_particles(self, v, dtheta, std=None) -> None:
+        noise = self.generator.normal(0, self.std, (self.amount, 3))
+        noise_x = np.sin(self.particles[:, 2])*noise[:,1] + np.cos(self.particles[:, 2])*noise[:,0]
+        noise_y = np.sin(self.particles[:, 2])*noise[:,0] + np.cos(self.particles[:, 2])*noise[:,1]
+        
+        self.particles[:,2] = self.particles[:, 2] + noise[:,2] + dtheta
+        self.particles[:,2] = wrap_to_pi(self.particles[:,2])
+        
+        self.particles[:,0] = -np.sin(self.particles[:, 2])*v + self.particles[:,0] + noise_x
+        self.particles[:,1] = np.cos(self.particles[:, 2])*v + self.particles[:,1] + noise_y
 
     def spawn_new_particles(self, x, y, theta) -> None:
         self.particles = np.tile([x, y, theta], (self.amount, 1))
@@ -57,27 +79,24 @@ class ParticleFilter:
         for i in range(1, len(groups)):
             self.particles = np.vstack([self.particles, groups[i]])
 
-    def update(self, lane, dx, dy, dtheta) -> None:
+    def update(self, lane, v, dtheta) -> None:
         trust_score = self.comparitor.trust_score(lane)
-        v = np.sqrt(dx**2+dy**2)
+        # v = np.sqrt(dx**2+dy**2)
         # print("SPEED", v)
-        self.update_particles(dx, dy, dtheta)
-        particle, idx, score = self.find_location(lane)
-        x = particle[0]
-        y = particle[1]
-        theta = particle[2]
+        self.update_particles(v, dtheta)
+        # particle, idx, score = self.find_location(lane)
+        scores = self.get_scores(lane)
+        self.resample(scores)
+        x, y, theta = self.get_average_position()
         # print("score", score)
         # print("trust", trust_score)
+        score = np.min(scores)
         score = min(1, np.exp(-2*(score-6)))*trust_score
         # print("SCORE:", score)
         self.kalman.predict(np.array([[v],[dtheta]]), np.array([[x],[y],[theta]]), score)
         self.x = self.kalman.x[0][0]
         self.y = self.kalman.x[1][0]
         self.theta = self.kalman.x[3][0]
-        self.particles[idx[0]][0] = self.x
-        self.particles[idx[0]][1] = self.y
-        self.particles[idx[0]][2] = self.theta
-        self.evolve_particles(self.particles[idx])
 
     def find_location(self, lane):
         lane = cv.resize(lane, (128, 64))
@@ -92,6 +111,45 @@ class ParticleFilter:
         idx = np.argsort(scores)
         return self.particles[idx[0]], idx[:self.groups], scores[idx[0]]
 
+    def get_scores(self, lane):
+        lane = cv.resize(lane, (128, 64))
+        scores = np.zeros(self.amount)
+        features_lane = self.comparitor.get_hog_features(lane)
+        for i, particle in enumerate(self.particles):
+            pos = (particle[0], particle[1])
+            angle = particle[2]
+            map_lane = self.mapper.get_sight(pos, angle)
+            map_features = self.comparitor.get_hog_features(map_lane)
+            scores[i] = self.comparitor.get_distance_features(features_lane, map_features)
+        return scores
+    
+    def resample(self, scores):
+        positions = (np.arange(self.amount) + np.random.uniform(0, 1)) / self.amount
+        indexes = np.zeros(self.amount, dtype=np.int16)
+        scores = np.max(scores) - scores
+        sum = np.sum(scores)
+        if sum == 0:
+            return
+        scores = scores/sum
+        cumulative_sum = np.cumsum(scores)
+        i = 0
+        j = 0
+        while i < self.amount:
+            if positions[i] < cumulative_sum[j]:
+                indexes[i] = j
+                i += 1
+            else:
+                j += 1
+                j = min(j, self.amount-1)
+        self.particles = self.particles[indexes]
+        
+    def get_average_position(self):
+        x = np.mean(self.particles[:,0])
+        y = np.mean(self.particles[:,1])
+        theta = np.mean(self.particles[:,2])
+        theta = wrap_to_pi(theta)
+        return x, y, theta
+        
     def plot(self):
         plt.figure(figsize=(6, 6))
         plt.axis('equal')

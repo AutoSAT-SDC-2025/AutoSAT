@@ -21,13 +21,17 @@ class Localizer:
         self.height = int(config["Localizer"]["height"])
         self.scale = float(config["Localizer"]["scale"])
         self.distance = int(config["Localizer"]["distance"])
-        x = float(config["Main"]["start_x"])
-        y = float(config["Main"]["start_y"])
-        theta = float(config["Main"]["start_theta"])
+        
+        self.x = float(config["Main"]["start_x"])
+        self.y = float(config["Main"]["start_y"])
+        self.theta = float(config["Main"]["start_theta"])
         
         self.mapper = Mapper()
+        self.x = self.x/self.mapper.scale
+        self.y = self.y/self.mapper.scale
+
         self.particle_filter = ParticleFilter()
-        self.set_start_location(x, y, theta)
+        # self.set_start_location(x, y, theta)
         self.matcher = StarKeyPointMatcher(width=self.width//self.scale, height=self.height//self.scale)
         self.transform_estimator = TransformAngleEstimator(pixel_threshold=30, distance=self.distance, scale=self.scale)
 
@@ -37,9 +41,20 @@ class Localizer:
 
         vars(self).update(kwargs)
     
-    def set_start_location(self, x, y, theta):
+    def set_start_location(self, x, y, theta, lane):
+        pf = ParticleFilter()
+        pf.amount = 2000
+        pf.std = [100, 100, 0.1]
+        print(x, y, theta)
+        pf.spawn_new_particles(x, y, theta)
+        pf._update_particles(0,0,0, std=pf.std)
+        particle, _, _ = pf.find_location(lane)
+        x = particle[0]
+        y = particle[1]
+        theta = particle[2]
         self.set_location(x, y, theta)
-        self.particle_filter.spawn_new_particles(self.x, self.y, theta)
+        print(x, y, theta)
+        self.particle_filter.spawn_new_particles(x, y, theta)
 
     def set_location(self, x, y, theta):
         self.x = x
@@ -101,6 +116,8 @@ class Localizer:
             self.kp, self.des = self.matcher.find_keypoints(img)
             self.translation = None
             self.initialized = True
+            if lane is not None:
+                self.set_start_location(self.x, self.y, self.theta, lane)
             return
         x_old = self.x
         y_old = self.y
@@ -117,7 +134,11 @@ class Localizer:
         # if lane is None, don't use the map to localize
         if lane is None:
             return
-        self.particle_filter.update(lane, dx, dy, dtheta)
+        # self.particle_filter.update(lane, dx, dy, dtheta)
+        # v = np.sqrt(translation[1][0]**2 + translation[0][0]**2)
+        # v = np.sqrt((translation[1][0]*1.1)**2 + translation[0][0]**2)
+        v = translation[1][0]
+        self.particle_filter.update(lane, v, dtheta)
         self.set_location(self.particle_filter.x, self.particle_filter.y, self.particle_filter.theta)
             
     def preprocess(self, img: np.array):

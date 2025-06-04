@@ -123,6 +123,24 @@ class Mapper:
         x, y = start_point
         length = self.distance*scale
         end_point = (int(x-np.sin(theta)*length), int(y+np.cos(theta)*length))
-        color = (0, 2550, 0)
+        color = (0, 255, 0)
         thickness = int(9*scale)
         return cv.arrowedLine(map_with_car, start_point, end_point, color, thickness, tipLength=0.5)
+
+    def get_map_with_particles(self, x_list, y_list, theta_list, scale=0.25):
+        # scale = scale*self.scale
+        map_with_car = cv.resize(self.map, None, fx=scale, fy=scale)
+        map_with_car = cv.cvtColor(map_with_car, cv.COLOR_GRAY2BGR)
+        for i in range(len(x_list)):
+            x = x_list[i]
+            y = y_list[i]
+            theta = theta_list[i]
+            
+            start_point = (int(x*scale*self.scale), int(y*scale*self.scale))
+            x, y = start_point
+            length = self.distance*scale
+            end_point = (int(x-np.sin(theta)*length), int(y+np.cos(theta)*length))
+            color = (0, 0, 255)
+            thickness = int(5*scale)
+            map_with_car = cv.arrowedLine(map_with_car, start_point, end_point, color, thickness, tipLength=0.5)
+        return map_with_car
