@@ -583,10 +583,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!state.running) return;
 
         const response = await apiRequest('stop', null, 'POST');
+
+        console.log("Stop response:", response);
+        
         if (response && response.success) {
             state.running = false;
             updateButtonStates();
             showAlert('Controller stopped', true);
+        } else {
+            console.error("Failed to stop controller properly:", response);
+            state.running = false;
+            updateButtonStates();
+            showAlert('Controller may not have stopped properly', false);
         }
     });
 
