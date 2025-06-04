@@ -48,7 +48,7 @@ class VehicleHandler:
         return False
 
     def set_waypoints(self, x, y):
-        waypoints = [[-0.25 + x, 1 + y], [-0.5 + x, 1.5 + y], [-0.75 + x, 1.75 + y], [-1 + x, 2 + y], [-1.5 + x, 2.5 + y], [-2 + x, 3 + y], [-2.5 + x, 5 + y], [-2.5 + x, 14 + y], [-2.25 + x, 15 + y], [-2 + x, 16 + y], [-1.5 + x, 16.5 + y], [-1 + x, 17 + y], [-0.75 + x, 17.5 + y], [-0.5 + x, 18 + y]]
+        waypoints = [[-0.25 + x, 0.75 + y], [-0.5 + x, 1 + y], [-0.75 + x, 1.25 + y], [-1 + x, 1.5 + y], [-1.5 + x, 1.75 + y], [-2 + x, 2 + y], [-2.25 + x, 2.5 + y], [-2.5 + x, 3 + y], [-2.5 + x, 14 + y], [-2.25 + x, 15 + y], [-2 + x, 16 + y], [-1.5 + x, 16.5 + y], [-1 + x, 17 + y], [-0.75 + x, 17.5 + y], [-0.5 + x, 18 + y]]
         return waypoints
 
     def set_rrt(self, goal, detections, waypoints):
@@ -254,7 +254,7 @@ class VehicleHandler:
                 cv2.putText(frame, label, (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-                if det["class"] == "Car" and det["distance"] <= 10 and not self.goal_set:
+                if det["class"] == "Car" and det["distance"] <= 8 and not self.goal_set:
                     self.goal = self.set_goal(det, x, y, theta)
                     self.goal_set = True
 
