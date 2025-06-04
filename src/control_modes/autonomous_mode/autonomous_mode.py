@@ -73,17 +73,18 @@ class AutonomousMode(IControlMode):
                 self.renderer.clear()
 
                 steering_angle, speed, line_visuals = self.nav.process(stitched)
-                self.renderer.add_drawings(line_visuals)
+                self.renderer.add_drawings_objectdetection(line_visuals)
 
                 traffic_state, detections, object_visuals = self.object_detector.process(front_view)
-                # self.renderer.add_drawings(object_visuals)
+                self.renderer.add_drawings_objectdetection(object_visuals)
 
                 saw_red_light = traffic_state['red_light']
                 speed_limit = traffic_state['speed_limit']
                 saw_car = traffic_state['car']
                 saw_pedestrian = traffic_state['person']
 
-                self.renderer.render(stitched)
+                self.renderer.render_lines(stitched)
+                self.renderer.render_objects(front_view)
                 for det in detections:
                     if saw_red_light and det["distance"] <= 2:
                         logging.info("Saw red light, stopping.")
