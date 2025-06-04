@@ -42,6 +42,7 @@ class ControlMode(IntEnum):
 class CameraResolution(IntEnum):
     WIDTH = 848
     HEIGHT = 480
+    FOCAL_LENGTH = 540
 
 class LineDetectionDims(IntEnum):
     WIDTH = 720

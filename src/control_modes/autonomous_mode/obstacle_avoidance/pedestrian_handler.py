@@ -1,46 +1,28 @@
-from rplidar import RPLidar
-import cv2
-from ....can_interface.bus_connection import connect_to_can_interface, disconnect_from_can_interface
-from ....can_interface.can_factory import select_can_controller_creator, create_can_controller
 from src.util.video import get_camera_config
 from ..object_detection.Detection import ObjectDetection
+from ....car_variables import CameraResolution
 
 class PedestrianHandler:
-    def __init__(self, weights_path, input_source):
-        self.captures = None
-        self.car_type = "Hunter"
-        self.can_bus = connect_to_can_interface(0)
-
-        self.can_creator = select_can_controller_creator(self.car_type)
-        self.can_controller = create_can_controller(self.can_creator, self.can_bus)
+    def __init__(self, weights_path = None, input_source = None, can_controller = None):
+        self.can_controller = can_controller
         self.cams = get_camera_config()
-        try:
-            self.lidar = RPLidar("Com3")
-        except:
-            self.lidar = RPLidar("/dev/ttyUSB0")
         self.object_detection = ObjectDetection(weights_path, input_source)
-        self.cam = cv2.VideoCapture(1)
         self.person_distance_threshold = 2
         self.previous_detection = {}
-        self.focal_length = 540
-        self.image_height = 480
-        self.image_width = 848
         self.initial_position = None
         self.current_position = None
         self.direction = None
 
-    def detect_objects(self):
-        ret, frame = self.cam.read()
-        if not ret:
-            print("Failed to capture frame from camera")
-            return []
-        return self.object_detection.detect_objects(frame)
+    def detect_objects(self, front_view = None):
+        if front_view is not None:
+            return self.object_detection.detect_objects(front_view)
+        return
 
     def get_initial_position(self, detections):
         for det in detections:
             if det["class"] == "Person":
                 x1, _, x2, _ = det["bbox"]
-                if (x1 + x2) / 2 < self.image_width / 2:
+                if (x1 + x2) / 2 < CameraResolution.WIDTH / 2:
                     self.initial_position = "Left"
                 else:
                     self.initial_position = "Right"
@@ -76,9 +58,9 @@ class PedestrianHandler:
             if det["class"] == "Person":
                 x_center = (det["bbox"][0] + det["bbox"][2]) / 2
                 print(x_center)
-                if x_center < self.image_width / 2:
+                if x_center < CameraResolution.WIDTH / 2:
                     self.current_position = "Left"
-                elif x_center > self.image_width / 2:
+                elif x_center > CameraResolution.WIDTH / 2:
                     self.current_position = "Right"
                 else:
                     self.current_position = "Unknown"
@@ -109,11 +91,11 @@ class PedestrianHandler:
             ped_driving_mode = self.can_controller.set_steering_and_throttle(0, 300)
             return ped_driving_mode, ped_parking_mode
 
-    def main(self):
+    def main(self, front_view = None):
         initial_position_set = False
 
         while True:
-            detections = self.detect_objects()
+            detections = self.object_detection.detect_objects(front_view)
             if not detections:
                 continue
 

@@ -1,36 +1,24 @@
 from .RRT import RRTStar
-from ....can_interface.bus_connection import connect_to_can_interface
-from ....can_interface.can_factory import select_can_controller_creator, create_can_controller
 from src.util.video import get_camera_config
 from ..localization.localization import Localizer
 from ..object_detection.Detection import ObjectDetection
 from ..line_detection.LineDetection import LineFollowingNavigation
-
+from ....car_variables import CameraResolution
 from rplidar import RPLidar
 from math import floor
-import cv2
+#import cv2
 import math
 import matplotlib.pyplot as plt
 import numpy as np
 
 class VehicleHandler:
-    def __init__(self, weights_path, input_source, localizer):
+    def __init__(self, weights_path = None, input_source = None, localizer = None, can_controller = None):
         self.localizer = localizer
-        self.captures = None
-        self.car_type = "Hunter"
-        self.can_bus = connect_to_can_interface(0)
-
-        self.can_creator = select_can_controller_creator(self.car_type)
-        self.can_controller = create_can_controller(self.can_creator, self.can_bus)
+        self.can_controller = can_controller
         self.cams = get_camera_config()
         self.object_detection = ObjectDetection(weights_path, input_source)
         self.lane_navigator = LineFollowingNavigation()
-        self.cam = cv2.VideoCapture(1)
-        try: self.lidar = RPLidar("COM3")
-        except: self.lidar = RPLidar("/dev/ttyUSB0")
-        self.image_width = 848
-        self.image_height = 480
-        self.focal_length = 540
+        self.lidar = RPLidar("/dev/ttyUSB0")
         self.car_detected = False
         self.collision = False
         self.goal_set = False
@@ -230,85 +218,70 @@ class VehicleHandler:
             return True
         return False
 
-    def main(self):
-        while self.cam.isOpened():
-            ret, frame = self.cam.read()
-            if not ret:
-                break
+    def main(self, front_view = None):
 
-            frame, detections = self.object_detection.detect_objects(frame)
+        frame, detections = self.object_detection.detect_objects(front_view)
 
-            x = self.localizer.x
-            y = self.localizer.y
-            theta = self.localizer.theta
+        x = self.localizer.x
+        y = self.localizer.y
+        theta = self.localizer.theta
 
-            steering_angle, lateral_distance, x_center = self.lane_navigator.process(frame)
-            lane_width = 3
-            scaling_factor = lane_width / 2
-            lane_center_offset = (x_center - (self.image_width / 2)) / self.image_width * scaling_factor
+        steering_angle, lateral_distance, x_center = self.lane_navigator.process(frame)
+        lane_width = 3
+        scaling_factor = lane_width / 2
+        lane_center_offset = (x_center - (CameraResolution.WIDTH / 2)) / CameraResolution.WIDTH * scaling_factor
 
-            try:
-                scan = next(self.iter_scans())
-                closest_distance = self.determine_closest(scan)
-                self.check_collision(closest_distance)
-            except StopIteration:
-                pass
+        try:
+            scan = next(self.iter_scans())
+            closest_distance = self.determine_closest(scan)
+            self.check_collision(closest_distance)
+        except StopIteration:
+            pass
 
-            for det in detections:
-                x1, y1, x2, y2 = det['bbox']
-                label = f"{det['class']} ({det['distance']:.2f}m)"
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.putText(frame, label, (x1, y1 - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        for det in detections:
+            """x1, y1, x2, y2 = det['bbox']
+            label = f"{det['class']} ({det['distance']:.2f}m)"
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.putText(frame, label, (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)"""
 
-                if det["class"] == "Car" and det["distance"] <= 10 and not self.goal_set:
-                    self.goal = self.set_goal(det, x, y, theta)
-                    self.goal_set = True
+            if det["class"] == "Car" and det["distance"] <= 10 and not self.goal_set:
+                self.goal = self.set_goal(det, x, y, theta)
+                self.goal_set = True
 
-                    if self.goal:
-                        target_theta = 0
-                        correction_distance = 2.0
+                if self.goal:
+                    target_theta = 0
+                    correction_distance = 2.0
 
-                        x_corrected = x - lane_center_offset
+                    x_corrected = x - lane_center_offset
 
-                        x_aligned = x_corrected + correction_distance * math.cos(target_theta)
-                        y_aligned = y + correction_distance * math.sin(target_theta)
+                    x_aligned = x_corrected + correction_distance * math.cos(target_theta)
+                    y_aligned = y + correction_distance * math.sin(target_theta)
 
-                        lane_center_wp = [x_aligned, y_aligned]
-                        waypoints = [lane_center_wp] + self.set_waypoints(x, y)
-                        result = self.set_rrt(self.goal, detections, waypoints)
-                        if result:
-                            self.x_vals, self.y_vals = result
-                            #self.plot_waypoints(self.goal, detections, self.x_vals, self.y_vals)
-                            self.path_found = True
-                            self.detections = detections
+                    lane_center_wp = [x_aligned, y_aligned]
+                    waypoints = [lane_center_wp] + self.set_waypoints(x, y)
+                    result = self.set_rrt(self.goal, detections, waypoints)
+                    if result:
+                        self.x_vals, self.y_vals = result
+                        #self.plot_waypoints(self.goal, detections, self.x_vals, self.y_vals)
+                        self.path_found = True
+                        self.detections = detections
 
-            cv2.imshow('Detection', frame)
+        if not self.collision:
+            if self.goal_set and self.path_found and self.x_vals and self.y_vals:
+                x_wp, y_wp = self.x_vals[0], self.y_vals[0]
 
-            if not self.collision:
-                if self.goal_set and self.path_found and self.x_vals and self.y_vals:
-                    x_wp, y_wp = self.x_vals[0], self.y_vals[0]
+                if self.waypoint_reached(x_wp, y_wp):
+                    print("Waypoint reached.")
+                    self.x_vals.pop(0)
+                    self.y_vals.pop(0)
 
-                    if self.waypoint_reached(x_wp, y_wp):
-                        print("Waypoint reached.")
-                        self.x_vals.pop(0)
-                        self.y_vals.pop(0)
-                        continue
+                self.steer_toward_waypoint((x_wp, y_wp))
 
-                    self.steer_toward_waypoint((x_wp, y_wp))
-
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-
-            if self.goal_set and self.path_found and not self.x_vals:
-                if self.goal_reached():
-                    print("Final goal reached!")
-                    self.can_controller.set_steering_and_throttle(0, 0)
-                    break
-
-        self.cam.release()
-        cv2.destroyAllWindows()
-
+        if self.goal_set and self.path_found and not self.x_vals:
+            if self.goal_reached():
+                print("Final goal reached!")
+                self.can_controller.set_steering_and_throttle(0, 0)
 
 if __name__ == '__main__':
     weights_path = "assets/v5_model.pt"

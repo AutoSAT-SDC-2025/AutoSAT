@@ -48,8 +48,8 @@ class AutonomousMode(IControlMode):
         self.localization_process = mp.Process(target=localization.localization_worker, args=(self.location,))
         self.localization_process.start()
 
-        self.vehicle_handler = VehicleHandler(weights_path='assets/v5_model.pt', input_source='video', localizer=localization_manager)
-        self.pedestrian_handler = PedestrianHandler(weights_path='assets/v5_model.pt', input_source='video')
+        self.vehicle_handler = VehicleHandler(weights_path='assets/v5_model.pt', input_source='video', localizer=localization_manager, can_controller=self.can_controller)
+        self.pedestrian_handler = PedestrianHandler(weights_path='assets/v5_model.pt', input_source='video', can_controller=self.can_controller)
 
     def adjust_steering(self, steering_angle):
         new_steering_angle = steering_angle * 576 / 90
@@ -92,12 +92,12 @@ class AutonomousMode(IControlMode):
                         self.can_controller.set_parking_mode(1)
                     elif saw_car and det["distance"] <= 10:
                         logging.info("Saw car, initializing overtake")
-                        self.vehicle_handler.main()
+                        self.vehicle_handler.main(front_view)
                         if self.vehicle_handler.goal_reached(threshold=0.1):
                             logging.info("Overtake completed, returning to original mode")
                     elif saw_pedestrian and det["distance"] <= 2:
                         logging.info("Saw person, stopping car")
-                        self.pedestrian_handler.main()
+                        self.pedestrian_handler.main(front_view)
                         if self.pedestrian_handler.pedestrian_crossed():
                             logging.info("Pedestrian crossed, continue driving")
                             self.pedestrian_handler.continue_driving()
