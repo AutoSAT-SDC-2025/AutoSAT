@@ -46,6 +46,12 @@ def main(weights_path: str, input_source: str, image_folder: str):
         traffic_state, detections, object_visuals = object_detector.process(frame)
         renderer.add_drawings(object_visuals)
 
+
+       # iterate over detections
+        for detection in detections:
+
+            pass
+
         # Uncomment if you want line detection visuals
         steering_angle, speed, line_visuals = line_detection.process(frame)
         renderer.add_drawings(line_visuals)
@@ -54,6 +60,8 @@ def main(weights_path: str, input_source: str, image_folder: str):
 
         # Auto-play: wait 20ms and advance, else wait indefinitely
         key = cv2.waitKey(20 if playing else 0)
+
+        print("Suggested steering angle:", steering_angle)
 
         if key == ord('q') or key == 27:  # Quit on 'q' or ESC
             break

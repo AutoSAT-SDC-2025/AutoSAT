@@ -393,22 +393,69 @@ class LineFollowingNavigation:
 
         return target, visuals
 
-    def calculateSteeringAngle(self, target, mid_point=None):
-        """Calculate steering angle."""
-        if target is None:
-            return 0.0
-
+    def calculateSteeringAngle(self, target, left_lines=None, right_lines=None, mid_point=None):
+        """Calculate steering angle based on detected lines and target."""
         if mid_point is None:
             mid_point = self.width / 2
 
-        # Calculate offset from center
-        offset = target - mid_point
+        max_angle = 45.0  # Increased for sharper turns
 
-        # Convert to steering angle (simple proportional control)
-        max_angle = 30.0
-        steering_angle = (offset / (self.width / 2)) * max_angle
+        # Case 1: Both lines detected - steer toward center of lane
+        if left_lines and right_lines and len(left_lines) > 0 and len(right_lines) > 0:
+            # Calculate offset from center
+            offset = target - mid_point if target is not None else 0.0
+            # Convert to steering angle (proportional control)
+            steering_angle = (offset / (self.width / 2)) * max_angle
 
-        # Limit angle
+        # Case 2: Only left line detected - drive parallel to left line
+        elif left_lines and len(left_lines) > 0 and (not right_lines or len(right_lines) == 0):
+            x1, y1, x2, y2 = left_lines[0]
+
+            # Calculate line angle relative to horizontal
+            line_angle = np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi
+
+            # We want to drive parallel to the line, so use the line angle directly
+            # Scale it down for smoother control
+            steering_angle = line_angle * 0.8  # Increased responsiveness
+
+            # Also consider distance from line to maintain safe distance
+            line_center_x = (x1 + x2) / 2
+            distance_from_line = line_center_x - mid_point
+
+            # If too close to left line, steer right; if too far, steer left
+            # For left line: positive distance means line is to the right of center
+            distance_correction = distance_from_line * 0.08  # Increased sensitivity
+            steering_angle += distance_correction
+
+        # Case 3: Only right line detected - drive parallel to right line
+        elif right_lines and len(right_lines) > 0 and (not left_lines or len(left_lines) == 0):
+            x1, y1, x2, y2 = right_lines[0]
+
+            # Calculate line angle relative to horizontal
+            line_angle = np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi
+
+            # We want to drive parallel to the line, so use the line angle directly
+            steering_angle = line_angle * 0.8  # Increased responsiveness
+
+            # Also consider distance from line to maintain safe distance
+            line_center_x = (x1 + x2) / 2
+            distance_from_line = line_center_x - mid_point
+
+            # If too close to right line, steer left; if too far, steer right
+            # For right line: negative distance means line is to the left of center
+            distance_correction = distance_from_line * 0.08  # Increased sensitivity
+            steering_angle += distance_correction
+
+        # Case 4: Target-based steering (fallback)
+        elif target is not None:
+            offset = target - mid_point
+            steering_angle = (offset / (self.width / 2)) * max_angle
+
+        else:
+            # No lines and no target - return 0
+            return 0.0
+
+        # Limit steering angle but allow larger range for sharp turns
         steering_angle = max(min(steering_angle, max_angle), -max_angle)
 
         return steering_angle
@@ -425,7 +472,19 @@ class LineFollowingNavigation:
         if visuals is None:
             visuals = []
 
-        steering_angle = self.calculateSteeringAngle(target)
+        # Get the detected lines for steering calculation
+        binary = self.detect_white_lines(img)
+        raw_lines = self.detect_lines(binary)
+        left_lines, right_lines = self.filter_lines(raw_lines, img.shape)
+
+        # Get best lines
+        best_left = self.get_best_line(left_lines)
+        best_right = self.get_best_line(right_lines)
+
+        final_left = [best_left] if best_left is not None else []
+        final_right = [best_right] if best_right is not None else []
+
+        steering_angle = self.calculateSteeringAngle(target, final_left, final_right)
         speed = self.calculateSpeed(steering_angle, base_speed)
 
         if target is not None:
