@@ -84,27 +84,27 @@ class AutonomousMode(IControlMode):
                 saw_pedestrian = traffic_state['person']
 
                 self.renderer.render(top_view)
-
-                if saw_red_light:
-                    logging.info("Saw red light, stopping.")
-                    self.can_controller.set_steering_and_throttle(0, 0)
-                    self.can_controller.set_parking_mode(1)
-                elif saw_car:
-                    logging.info("Saw car, initializing overtake")
-                    self.vehicle_handler.main()
-                    if self.vehicle_handler.goal_reached(threshold=0.1):
-                        logging.info("Overtake completed, returning to original mode")
-                elif saw_pedestrian:
-                    logging.info("Saw person, stopping car")
-                    self.pedestrian_handler.main()
-                    if self.pedestrian_handler.pedestrian_crossed():
-                        logging.info("Pedestrian crossed, continue driving")
-                        self.pedestrian_handler.continue_driving()
-                else:
-                    logging.info(f"Speed: {speed}, Steering: {steering_angle}")
-                    logging.info(f"X: {self.location.x} Y: {self.location.y} THETA: {self.location.theta}")
-                    self.can_controller.set_steering_and_throttle(-(steering_angle * 10), 320)
-                    self.can_controller.set_parking_mode(0)
+                for det in detections:
+                    if saw_red_light and det["distance"] <= 2:
+                        logging.info("Saw red light, stopping.")
+                        self.can_controller.set_steering_and_throttle(0, 0)
+                        self.can_controller.set_parking_mode(1)
+                    elif saw_car and det["distance"] <= 10:
+                        logging.info("Saw car, initializing overtake")
+                        self.vehicle_handler.main()
+                        if self.vehicle_handler.goal_reached(threshold=0.1):
+                            logging.info("Overtake completed, returning to original mode")
+                    elif saw_pedestrian and det["distance"] <= 2:
+                        logging.info("Saw person, stopping car")
+                        self.pedestrian_handler.main()
+                        if self.pedestrian_handler.pedestrian_crossed():
+                            logging.info("Pedestrian crossed, continue driving")
+                            self.pedestrian_handler.continue_driving()
+                    else:
+                        logging.info(f"Speed: {speed}, Steering: {steering_angle}")
+                        logging.info(f"X: {self.location.x} Y: {self.location.y} THETA: {self.location.theta}")
+                        self.can_controller.set_steering_and_throttle(-(steering_angle * 10), 320)
+                        self.can_controller.set_parking_mode(0)
 
         except Exception as e:
             logging.error(f"Error in autonomous mode: {e}")
