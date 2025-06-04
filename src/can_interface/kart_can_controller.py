@@ -10,6 +10,7 @@ class KartCANController(ICanController):
     can_bus: can.Bus
     __listeners: dict[int, list[callable]]
     __thread: threading.Thread
+    __running: bool
 
     def __init__(self, bus: can.Bus) -> None:
         self.can_bus = bus
@@ -28,6 +29,7 @@ class KartCANController(ICanController):
 
         self.__breaking_message = init_can_message(KartControlCanIDs.breaking.value)
         self.__breaking_task = self.can_bus.send_periodic(self.__breaking_message, CAN_MESSAGE_SENDING_SPEED)
+        self.__running = False
 
     def add_listener(self, message_id: int, listener: callable) -> None:
         if message_id not in self.__listeners:
@@ -35,6 +37,7 @@ class KartCANController(ICanController):
         self.__listeners[message_id].append(listener)
 
     def start(self) -> None:
+        self.__running = True
         self.__thread = threading.Thread(target=self.__listen, daemon=True)
         self.__thread.start()
         logging.debug("created task for __listen")
@@ -72,11 +75,12 @@ class KartCANController(ICanController):
         self.__breaking_task.modify_data(self.__breaking_message)
 
     def stop(self) -> None:
+        self.__running = False
         if self.__thread and self.__thread.is_alive():
             self.__thread.join()
 
     def __listen(self) -> None:
-        while True:
+        while self.__running:
             message = self.can_bus.recv(0.5)
             if message is not None and message.arbitration_id in self.__listeners:
                 for listener in self.__listeners[message.arbitration_id]:
