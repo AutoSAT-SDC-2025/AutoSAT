@@ -243,7 +243,9 @@ class VehicleHandler:
             theta = self.localizer.theta
 
             steering_angle, lateral_distance, x_center = self.lane_navigator.process(frame)
-            lane_center_offset = (x_center - (self.image_width // 2)) / self.image_width * 1.0  # In meters
+            lane_width = 3
+            scaling_factor = lane_width / 2
+            lane_center_offset = (x_center - (self.image_width // 2)) / self.image_width * scaling_factor
 
             try:
                 scan = next(self.iter_scans())
