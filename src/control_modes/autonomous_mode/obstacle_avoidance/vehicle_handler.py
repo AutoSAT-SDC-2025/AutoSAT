@@ -245,7 +245,7 @@ class VehicleHandler:
             steering_angle, lateral_distance, x_center = self.lane_navigator.process(frame)
             lane_width = 3
             scaling_factor = lane_width / 2
-            lane_center_offset = (x_center - (self.image_width // 2)) / self.image_width * scaling_factor
+            lane_center_offset = (x_center - (self.image_width / 2)) / self.image_width * scaling_factor
 
             try:
                 scan = next(self.iter_scans())
