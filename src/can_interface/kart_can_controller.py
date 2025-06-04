@@ -77,7 +77,7 @@ class KartCANController(ICanController):
     def stop(self) -> None:
         self.__running = False
         if self.__thread and self.__thread.is_alive():
-            self.__thread.join()
+            self.__thread.join(timeout=2)
 
     def __listen(self) -> None:
         while self.__running:
