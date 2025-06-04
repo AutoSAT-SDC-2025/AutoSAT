@@ -65,25 +65,25 @@ class AutonomousMode(IControlMode):
                 self.can_controller.set_control_mode(HunterControlMode.command_mode)
 
             while True:
-                top_view = self.camera_controller.get_top_view()
+                stitched = self.camera_controller.get_stitched_image()
                 front_view = self.camera_controller.get_front_view()
 
                 self.location.img = front_view
 
                 self.renderer.clear()
 
-                steering_angle, speed, line_visuals = self.nav.process(top_view)
+                steering_angle, speed, line_visuals = self.nav.process(stitched)
                 self.renderer.add_drawings(line_visuals)
 
                 traffic_state, detections, object_visuals = self.object_detector.process(front_view)
-                self.renderer.add_drawings(object_visuals)
+                # self.renderer.add_drawings(object_visuals)
 
                 saw_red_light = traffic_state['red_light']
                 speed_limit = traffic_state['speed_limit']
                 saw_car = traffic_state['car']
                 saw_pedestrian = traffic_state['person']
 
-                self.renderer.render(top_view)
+                self.renderer.render(stitched)
                 for det in detections:
                     if saw_red_light and det["distance"] <= 2:
                         logging.info("Saw red light, stopping.")
