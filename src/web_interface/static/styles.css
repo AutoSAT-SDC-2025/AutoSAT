@@ -303,6 +303,10 @@ footer {
     font-size: 16px;
 }
 
+#control-messages .can-data-title {
+    color: #f0ad4e;
+}
+
 .can-data-value {
     margin: 5px 0;
     font-size: 14px;

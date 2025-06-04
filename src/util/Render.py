@@ -43,12 +43,10 @@ class Renderer:
     def render_lines(self, frame):
         """Render line detection drawings onto the frame."""
         self.last_rendered_lines_image = self._apply_draw_ops(frame, self.line_ops)
-        return self.last_rendered_lines_image
 
     def render_objects(self, frame):
         """Render object detection drawings onto the frame."""
         self.last_rendered_objects_image = self._apply_draw_ops(frame, self.object_ops)
-        return self.last_rendered_objects_image
 
     def get_last_linedetection_image(self):
         """Return last rendered image for line detection."""

@@ -23,13 +23,12 @@ from src.control_modes.manual_mode.manual_mode import ManualMode
 from src.control_modes.autonomous_mode.autonomous_mode import AutonomousMode
 from src.camera.camera_controller import CameraController
 from src.misc import setup_listeners
-
 from src.data_logger.logger_manager import DataLoggerManager
-
 from .websocket_manager import can_ws_manager
+from src.util.Render import Renderer
 
 class CameraManager:
-    def __init__(self):
+    def __init__(self, renderer = None):
         self.active = False
         self.camera_controller = None
         self.camera_thread = None
@@ -37,6 +36,8 @@ class CameraManager:
         self.clients = []
         self.frame_task = None
         self.view_mode = "front"
+        self.show_rendered = False
+        self.renderer = renderer if renderer is not None else Renderer()
         try:
             self.camera_controller = CameraController()
             self.camera_controller.enable_cameras()
@@ -75,8 +76,8 @@ class CameraManager:
         return False
 
     def set_view_mode(self, mode):
-        """Set the camera view mode: front, left, right, topdown, stitched"""
-        if mode in ["front", "left", "right", "topdown", "stitched"]:
+        """Set the camera view mode"""
+        if mode in ["front", "left", "right", "topdown", "stitched", "lines", "objects"]:
             self.view_mode = mode
             return True
         return False
@@ -97,6 +98,10 @@ class CameraManager:
                     self.frame = self.camera_controller.get_top_down_view()
                 elif self.view_mode == "stitched":
                     self.frame = self.camera_controller.get_stitched_image()
+                elif self.view_mode == "lines" and self.renderer:
+                    self.frame = self.renderer.get_last_linedetection_image()
+                elif self.view_mode == "objects" and self.renderer:
+                    self.frame = self.renderer.get_last_objectdetection_image()
 
                 if self.frame is not None and (self.frame.shape[1] > CameraResolution.WIDTH or self.frame.shape[0] > CameraResolution.HEIGHT):
                     self.frame = cv2.resize(self.frame, (CameraResolution.WIDTH, CameraResolution.HEIGHT))
@@ -135,13 +140,15 @@ class CameraManager:
             self.clients.remove(websocket)
 
 class ControlManager:
-    def __init__(self, camera_controller = None):
+    def __init__(self, camera_controller = None, renderer = None, data_logger_manager = None):
         self.mode = None
         self.car_type = None
         self.controller = None
         self.controller_thread = None
         self.running = False
         self.camera_controller = camera_controller
+        self.renderer = renderer if renderer is not None else Renderer()
+        self.data_logger_manager = data_logger_manager
         if self.camera_controller is None:
             try:
                 self.camera_controller = CameraController()
@@ -193,7 +200,7 @@ class ControlManager:
                 self.controller = ManualMode(self.car_type)
             else:
                 logger.info("Starting autonomous mode...")
-                self.controller = AutonomousMode(self.car_type, self.camera_controller)
+                self.controller = AutonomousMode(self.car_type, self.camera_controller, self.renderer, self.data_logger_manager)
 
             setup_listeners(self.controller.can_controller, self.car_type)
             logger.info(f"CAN listeners registered for {self.car_type} controller")
@@ -246,10 +253,11 @@ class ControlManager:
             'running': self.running
         }
 
-camera_manager = CameraManager()
+shared_renderer = Renderer()
+camera_manager = CameraManager(renderer = shared_renderer)
 camera_manager.start()
-control_manager = ControlManager(camera_manager.camera_controller)
-data_logger_manager = DataLoggerManager(camera_manager.camera_controller)
+data_logger_manager = DataLoggerManager(camera_controller = camera_manager.camera_controller)
+control_manager = ControlManager(camera_controller = camera_manager.camera_controller, renderer = shared_renderer, data_logger_manager = data_logger_manager)
 
 @asynccontextmanager
 async def lifespan(app_instance: FastAPI):

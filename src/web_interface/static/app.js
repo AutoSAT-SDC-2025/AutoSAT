@@ -51,7 +51,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const topdownViewBtn = document.getElementById('topdown-view');
     const stitchedViewBtn = document.getElementById('stitched-view');
     const currentView = document.getElementById('current-view');
-
+    const linesViewBtn = document.getElementById('lines-view');
+    const objectsViewBtn = document.getElementById('objects-view');
 
     const loggerToggle = document.getElementById('logger-toggle');
     const loggerStatus = document.getElementById('logger-status');
@@ -228,79 +229,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function processCAN(message) {
         console.log("Processing CAN message:", message);
-        const { timestamp, type, id, data } = message;
+        
+        try {
+            const { timestamp, type, id, data } = JSON.parse(message);
 
-        console.log("Adding to log:", type, id, data);
-        addCANLogEntry(timestamp, type, id, data);
-
-        console.log("Updating UI for:", type);
-        updateCANUI(type, data, timestamp);
-    }
-
-    function addCANLogEntry(timestamp, type, id, data) {
-        console.log("Adding log entry:", { timestamp, type, id, data });
-
-        const entry = document.createElement('div');
-        entry.className = `can-log-entry ${type && type.startsWith('kart') ? 'kart' : 'hunter'}`;
-
-        entry.innerHTML = `
-            <span class="timestamp">${timestamp || 'Unknown'}</span>
-            <span class="id">${id || 'Unknown'}</span>
-            <span class="type">${formatMessageType(type || 'unknown')}</span>
-            <span class="data">${formatMessageData(type, data)}</span>
-        `;
-
-        if (canLog.firstChild) {
-            canLog.insertBefore(entry, canLog.firstChild);
-        } else {
-            canLog.appendChild(entry);
-        }
-
-        while (canLog.childNodes.length > 50) {
-            canLog.removeChild(canLog.lastChild);
-        }
-    }
-
-    function formatMessageType(type) {
-        return type.split('_').map(word =>
-            word.charAt(0).toUpperCase() + word.slice(1)
-        ).join(' ');
-    }
-
-    function formatMessageData(type, data) {
-        if (!data) return '';
-
-        const highlightKeys = {
-            hunter_movement: ['speed', 'steering'],
-            hunter_status: ['brake_status'],
-            kart_speed: ['speed'],
-            kart_steering: ['steering_raw'],
-            kart_throttle: ['throttle_voltage', 'braking', 'gear'],
-            kart_breaking: ['current_pot', 'target_pot', 'status']
-        };
-
-        const highlights = highlightKeys[type] || [];
-
-        let result = '';
-        for (const key in data) {
-            if (key === 'type') continue;
-            const value = data[key];
-            const isHighlight = highlights.includes(key);
-            result += `${key}: <span class="${isHighlight ? 'value-highlight' : ''}">${value}</span> `;
-        }
-
-        return result;
-    }
-
-    function updateCANUI(type, data, timestamp) {
-        const formattedTime = `Last update: ${timestamp}`;
-
-        if (type.startsWith('hunter')) {
-
-            if (state.carType === 'hunter') {
-                hunterDataSection.classList.remove('hidden');
-                kartDataSection.classList.add('hidden');
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.innerHTML = `<span class="timestamp">${timestamp}</span> <span class="id">${id}</span> <span class="type">${type}</span>`;
+            
+            const keys = highlightKeys[type] || [];
+            
+            if (Object.keys(data).length > 0) {
+                logEntry.innerHTML += ' | ';
+                logEntry.innerHTML += Object.entries(data)
+                    .map(([key, value]) => {
+                        const highlighted = keys.includes(key) ? 'highlighted' : '';
+                        return `<span class="key">${key}:</span> <span class="${highlighted}">${value}</span>`;
+                    })
+                    .join(' | ');
             }
+            
+            canLog.appendChild(logEntry);
+
+            while (canLog.childElementCount > 100) {
+                canLog.removeChild(canLog.firstChild);
+            }
+
+            canLog.scrollTop = canLog.scrollHeight;
 
             switch (type) {
                 case 'hunter_movement':
@@ -314,15 +269,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     hunterBrake.textContent = data.brake_status;
                     hunterStatusTimestamp.textContent = formattedTime;
                     break;
-            }
-        } else if (type.startsWith('kart')) {
-
-            if (state.carType === 'kart') {
-                kartDataSection.classList.remove('hidden');
-                hunterDataSection.classList.add('hidden');
-            }
-
-            switch (type) {
                 case 'kart_speed':
                     kartSpeed.textContent = data.speed;
                     kartMotionTimestamp.textContent = formattedTime;
@@ -344,8 +290,72 @@ document.addEventListener('DOMContentLoaded', () => {
                     kartBreakStatus.textContent = data.error;
                     kartBreakingTimestamp.textContent = formattedTime;
                     break;
+
+                case 'hunter_movement_control':
+                    updateControlCard('hunter-movement-control', 'Hunter Movement Command', {
+                        'Command Speed': data.speed !== undefined ? data.speed.toFixed(2) + ' m/s' : 'N/A',
+                        'Command Steering': data.steering !== undefined ? data.steering.toFixed(2) + ' rad' : 'N/A'
+                    });
+                    break;
+                    
+                case 'hunter_control_mode':
+                    updateControlCard('hunter-control-mode', 'Hunter Control Mode', {
+                        'Mode': data.mode || 'Unknown'
+                    });
+                    break;
+                    
+                case 'hunter_parking_control':
+                    updateControlCard('hunter-parking-control', 'Hunter Parking', {
+                        'Parking': data.engaged ? 'Engaged' : 'Disengaged'
+                    });
+                    break;
+                    
+                case 'kart_steering_control':
+                    updateControlCard('kart-steering-control', 'Kart Steering Command', {
+                        'Command Angle': data.steering_angle !== undefined ? data.steering_angle.toFixed(2) : 'N/A'
+                    });
+                    break;
+                    
+                case 'kart_throttle_control':
+                    updateControlCard('kart-throttle-control', 'Kart Throttle Command', {
+                        'Command Throttle': data.throttle !== undefined ? data.throttle : 'N/A',
+                        'Gear': data.gear || 'N/A'
+                    });
+                    break;
+                    
+                case 'kart_break_control':
+                    updateControlCard('kart-break-control', 'Kart Brake Command', {
+                        'Command Brake': data.brake_value !== undefined ? data.brake_value : 'N/A'
+                    });
+                    break;
             }
+            
+            state.messageCount++;
+            canMessageCount.textContent = state.messageCount;
+            
+        } catch (error) {
+            console.error('Error processing CAN message:', error);
         }
+    }
+
+    function updateControlCard(id, title, values) {
+        let card = document.getElementById(id);
+        
+        if (!card) {
+            const controlGrid = document.querySelector('#control-messages .can-data-grid');
+            card = document.createElement('div');
+            card.id = id;
+            card.className = 'can-data-card';
+            controlGrid.appendChild(card);
+        }
+        
+        let cardContent = `<div class="can-data-title">${title}</div>`;
+        
+        for (const [label, value] of Object.entries(values)) {
+            cardContent += `<div class="can-data-value">${label}: <span class="value-highlight">${value}</span></div>`;
+        }
+        
+        card.innerHTML = cardContent;
     }
 
     function startPingInterval(socket) {
@@ -580,7 +590,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    [frontViewBtn, leftViewBtn, rightViewBtn, topdownViewBtn, stitchedViewBtn].forEach(btn => {
+    [frontViewBtn, leftViewBtn, rightViewBtn, topdownViewBtn, stitchedViewBtn, linesViewBtn, objectsViewBtn].forEach(btn => {
         btn.addEventListener('click', () => {
             const view = btn.id.replace('-view', '');
             if (cameraSocket && cameraSocket.readyState === WebSocket.OPEN) {
@@ -590,12 +600,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     loggerToggle.addEventListener('change', async () => {
-        await toggleLogger();  // This function already exists but wasn't being called
+        await toggleLogger();
     });
 
     function updateCameraViewButtons(activeView) {
 
-        const viewButtons = [frontViewBtn, leftViewBtn, rightViewBtn, topdownViewBtn, stitchedViewBtn];
+        const viewButtons = [frontViewBtn, leftViewBtn, rightViewBtn, topdownViewBtn, stitchedViewBtn, linesViewBtn, objectsViewBtn];
         viewButtons.forEach(btn => btn.classList.remove('active'));
 
         let viewName = 'Unknown';
@@ -620,6 +630,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 stitchedViewBtn.classList.add('active');
                 viewName = 'Stitched';
                 break;
+            case 'lines':
+                linesViewBtn.classList.add('active');
+                viewName = 'Lines';
+                break
+            case 'objects':
+                objectsViewBtn.classList.add('active');
+                viewName = 'Objects';
+                break
         }
         
         currentView.textContent = viewName;

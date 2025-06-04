@@ -34,11 +34,16 @@ class DataLoggerManager:
 
         self.__camera_log_thread = None
         self.__can_log_thread = None
-
+        self.__location_log_thread = None
+        
         self.log_dir = None
         self.raw_can_file = None
         self.decoded_can_file = None
         self.raw_can_writer = None
+        
+        self.location_file = None
+        self.location_writer = None
+        self.location_queue = []
 
     def get_can_message(self):
         try:
@@ -50,9 +55,14 @@ class DataLoggerManager:
         self.enabled = True
         self.__camera_log_thread = threading.Thread(target=self.__log_camera_frames, daemon=True)
         self.__can_log_thread = threading.Thread(target=self.__log_can_data, daemon=True)
+        self.__location_log_thread = threading.Thread(target=self.__log_location_data, daemon=True)
+        
+        self.create_folder_structure()
+        
         self.__camera_log_thread.start()
         self.__can_log_thread.start()
-        self.create_folder_structure()
+        self.__location_log_thread.start()
+        
         logging.info("Enabled logger")
 
     def disable_logger(self):
@@ -63,6 +73,9 @@ class DataLoggerManager:
 
         if self.__camera_log_thread and self.__camera_log_thread.is_alive():
             self.__camera_log_thread.join(timeout=2.0)
+            
+        if self.__location_log_thread and self.__location_log_thread.is_alive():
+            self.__location_log_thread.join(timeout=2.0)
 
         if self.raw_can_file:
             self.raw_can_file.close()
@@ -71,10 +84,14 @@ class DataLoggerManager:
         if self.decoded_can_file:
             self.decoded_can_file.close()
             self.decoded_can_file = None
+            
+        if self.location_file:
+            self.location_file.close()
+            self.location_file = None
+            
         logging.info("Disabled logger")
 
     def create_folder_structure(self):
-        """Create folder structure for storing logs"""
         session_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")[:-3]
         base_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "logs")
         self.log_dir = os.path.join(base_dir, f"session_{session_timestamp}")
@@ -91,8 +108,19 @@ class DataLoggerManager:
         self.raw_can_writer.writerow(["timestamp", "id", "data_hex"])
 
         self.decoded_can_file = open(os.path.join(self.log_dir, "can", "decoded_messages.json"), 'w')
+        
+        self.location_file = open(os.path.join(self.log_dir, "location_data.csv"), 'w', newline='')
+        self.location_writer = csv.writer(self.location_file)
+        self.location_writer.writerow(["timestamp", "x", "y", "theta"])
 
         logging.info(f"Created log directory: {self.log_dir}")
+        
+    def add_location_data(self, x, y, theta):
+        if not self.enabled:
+            return
+
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")[:-3]
+        self.location_queue.append((timestamp, x, y, theta))
 
     def __log_can_data(self):
         while self.enabled:
@@ -154,3 +182,16 @@ class DataLoggerManager:
                     cv2.imwrite(os.path.join(self.log_dir, "images", "topdown", f"frame_{camera_timestamp}.jpg"), topdown_frame)
             except Exception as e:
                 logging.error(f"Error saving top down view: {e}")
+                
+    def __log_location_data(self):
+        while self.enabled:
+            try:
+                location_batch = self.location_queue.copy()
+                self.location_queue = []
+                    
+                if location_batch and self.location_writer:
+                    for entry in location_batch:
+                        self.location_writer.writerow(entry)
+                    self.location_file.flush()
+            except Exception as e:
+                logging.error(f"Error logging location data: {e}")

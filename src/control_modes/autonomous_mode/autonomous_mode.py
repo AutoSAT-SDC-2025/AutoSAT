@@ -15,7 +15,7 @@ from .obstacle_avoidance.pedestrian_handler import PedestrianHandler
 
 class AutonomousMode(IControlMode):
 
-    def __init__(self, car_type: CarType, use_checkpoint_mode=False, camera_controller = None):
+    def __init__(self, car_type: CarType, use_checkpoint_mode=False, camera_controller = None, renderer = None, data_logger_manager = None):
         self.camera_controller = camera_controller
         if self.camera_controller is None:
             try:
@@ -37,7 +37,9 @@ class AutonomousMode(IControlMode):
         self.nav = LineFollowingNavigation(width=LineDetectionDims['width'], height=LineDetectionDims['height'])
         self.object_detector = ObjectDetection(weights_path='assets/v5_model.pt', input_source='video')
         self.traffic_manager = TrafficManager()
-        self.renderer = Renderer()
+        self.renderer = renderer if renderer is not None else Renderer()
+
+        self.data_logger_manager = data_logger_manager
 
         localization_manager = mp.Manager()
         self.location = localization_manager.Namespace()
@@ -104,6 +106,7 @@ class AutonomousMode(IControlMode):
                     else:
                         logging.info(f"Speed: {speed}, Steering: {steering_angle}")
                         logging.info(f"X: {self.location.x} Y: {self.location.y} THETA: {self.location.theta}")
+                        self.data_logger_manager.add_location_data(self.location.x, self.location.y, self.location.theta)
                         self.can_controller.set_steering_and_throttle(-(steering_angle * 10), 320)
                         self.can_controller.set_parking_mode(0)
 
