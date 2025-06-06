@@ -91,7 +91,7 @@ class PedestrianHandler:
             self.can_controller.set_kart_gearbox(KartGearBox.forward)
             self.can_controller.set_throttle(100)
             self.can_controller.set_steering(0)
-        return "Continuing to drive""""
+        return "Continuing to drive"""
 
     """def continue_driving(self):
         if self.pedestrian_crossed():
