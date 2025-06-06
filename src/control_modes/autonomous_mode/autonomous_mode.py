@@ -34,7 +34,7 @@ class AutonomousMode(IControlMode):
         self.car_seen_counter = 0
         self.car_on_left = False
 
-        self.nav = LineFollowingNavigation(width=LineDetectionDims['width'], height=LineDetectionDims['height'])
+        self.nav = LineFollowingNavigation(width=LineDetectionDims.WIDTH, height=LineDetectionDims.HEIGHT)
         self.object_detector = ObjectDetection(weights_path='assets/v5_model.pt', input_source='video')
         self.traffic_manager = TrafficManager()
         self.renderer = renderer if renderer is not None else Renderer()
