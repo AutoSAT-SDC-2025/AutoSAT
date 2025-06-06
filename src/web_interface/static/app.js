@@ -71,6 +71,21 @@ document.addEventListener('DOMContentLoaded', () => {
         loggerPath: null
     };
 
+    const highlightKeys = {
+        hunter_movement: ['speed', 'steering'],
+        hunter_status: ['body_status', 'control_mode', 'brake_status'],
+        kart_steering: ['steering_raw'],
+        kart_breaking: ['current_pot', 'target_pot', 'error'],
+        kart_throttle: ['throttle_voltage', 'braking', 'gear'],
+        kart_speed: ['speed'],
+        hunter_movement_control: ['speed', 'steering'],
+        hunter_control_mode: ['mode'],
+        hunter_parking_control: ['engaged'],
+        kart_steering_control: ['steering_angle'],
+        kart_throttle_control: ['throttle', 'gear'],
+        kart_break_control: ['brake_value']
+    };
+
     let cameraSocket = null;
     let canSocket = null;
 
@@ -233,6 +248,9 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const { timestamp, type, id, data } = JSON.parse(message);
 
+            const date = new Date(timestamp);
+            const formattedTime = `Last update: ${date.toLocaleTimeString()}`;
+
             const logEntry = document.createElement('div');
             logEntry.className = 'log-entry';
             logEntry.innerHTML = `<span class="timestamp">${timestamp}</span> <span class="id">${id}</span> <span class="type">${type}</span>`;
@@ -343,6 +361,12 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (!card) {
             const controlGrid = document.querySelector('#control-messages .can-data-grid');
+
+            if (!controlGrid) {
+                console.error("Control messages container not found! Element with ID 'control-messages' or child '.can-data-grid' is missing.");
+                return;
+            }
+            
             card = document.createElement('div');
             card.id = id;
             card.className = 'can-data-card';
@@ -641,11 +665,11 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'lines':
                 linesViewBtn.classList.add('active');
                 viewName = 'Lines';
-                break
+                break;
             case 'objects':
                 objectsViewBtn.classList.add('active');
                 viewName = 'Objects';
-                break
+                break;
         }
         
         currentView.textContent = viewName;
