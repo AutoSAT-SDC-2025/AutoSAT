@@ -12,6 +12,7 @@ from ...can_interface.can_factory import select_can_controller_creator, create_c
 from ...util.Render import Renderer
 from .obstacle_avoidance.vehicle_handler import VehicleHandler
 from .obstacle_avoidance.pedestrian_handler import PedestrianHandler
+from ...misc import calculate_steering, calculate_throttle, controller_break_value, dead_man_switch, setup_listeners
 
 class AutonomousMode(IControlMode):
 
@@ -90,8 +91,14 @@ class AutonomousMode(IControlMode):
                 for det in detections:
                     if saw_red_light and det["distance"] <= 2:
                         logging.info("Saw red light, stopping.")
-                        self.can_controller.set_steering_and_throttle(0, 0)
-                        self.can_controller.set_parking_mode(1)
+
+
+                        if self.car_type == CarType.hunter:
+                            self.can_controller.set_steering_and_throttle(0, 0)
+                            self.can_controller.set_parking_mode(1)
+                        else:
+                            self.can_controller.set_throttle(0.0)
+                            self.can_controller.set_break(100.0)
                     elif saw_car and det["distance"] <= 10:
                         logging.info("Saw car, initializing overtake")
                         self.vehicle_handler.main(front_view)
@@ -107,8 +114,15 @@ class AutonomousMode(IControlMode):
                         logging.info(f"Speed: {speed}, Steering: {steering_angle}")
                         logging.info(f"X: {self.location.x} Y: {self.location.y} THETA: {self.location.theta}")
                         self.data_logger_manager.add_location_data(self.location.x, self.location.y, self.location.theta)
-                        self.can_controller.set_steering_and_throttle(-(steering_angle * 10), 320)
-                        self.can_controller.set_parking_mode(0)
+
+                        if self.car_type == CarType.hunter:
+                            self.can_controller.set_steering_and_throttle(-(steering_angle * 10), 320)
+                            self.can_controller.set_parking_mode(0)
+                        else:
+                            self.can_controller.set_break(0)
+                            self.can_controller.set_kart_gearbox(KartGearBox.forward)
+                            self.can_controller.set_throttle(30)
+                            self.can_controller.set_steering(-(steering_angle * 10))
 
         except Exception as e:
             logging.error(f"Error in autonomous mode: {e}")
