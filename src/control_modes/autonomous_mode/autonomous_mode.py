@@ -83,7 +83,7 @@ class AutonomousMode(IControlMode):
                 self.renderer.clear()
 
                 steering_angle, speed, line_visuals = self.nav.process(stitched)
-                self.renderer.add_drawings_objectdetection(line_visuals)
+                self.renderer.add_drawings_linedetection(line_visuals)
 
                 traffic_state, detections, object_visuals = self.object_detector.process(front_view)
                 self.renderer.add_drawings_objectdetection(object_visuals)
