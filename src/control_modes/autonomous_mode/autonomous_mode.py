@@ -14,6 +14,11 @@ from .obstacle_avoidance.vehicle_handler import VehicleHandler
 from .obstacle_avoidance.pedestrian_handler import PedestrianHandler
 from ...misc import calculate_steering, calculate_throttle, controller_break_value, dead_man_switch, setup_listeners
 
+def normalize_steering(angle_deg: float) -> float:
+    # Clip angle to valid range first (just in case)
+    angle_deg = max(min(angle_deg, 45), -45)
+    return (angle_deg / 45.0) * 1.25
+
 class AutonomousMode(IControlMode):
 
     def __init__(self, car_type: CarType, use_checkpoint_mode=False, camera_controller = None, renderer = None, data_logger_manager = None):
@@ -131,8 +136,8 @@ class AutonomousMode(IControlMode):
                             self.can_controller.set_break(0)
                             self.can_controller.set_kart_gearbox(KartGearBox.forward)
                             self.can_controller.set_throttle(30)
-                            self.can_controller.set_steering(-(steering_angle * 10))
-
+                            normalized_steering = normalize_steering(steering_angle)
+                            self.can_controller.set_steering(normalized_steering)
         except Exception as e:
             logging.error(f"Error in autonomous mode: {e}")
         finally:
