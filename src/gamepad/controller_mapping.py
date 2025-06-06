@@ -8,3 +8,5 @@ class ControllerMapping(StrEnum):
     R_joystickY = 'RAS -Y'
     throttle = 'LT'
     park = 'RT'
+    reverse = 'X'
+    forward = 'Y'
