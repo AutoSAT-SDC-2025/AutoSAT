@@ -308,10 +308,7 @@ class VehicleHandler:
                     self.can_controller.set_steering(0)
                     self.can_controller.set_throttle(50)
 
-    def steer_to_centre(self, detections=None, front_view=None):
-        if not detections or not front_view:
-            return False
-
+    def steer_to_centre(self, detections=None):
         for det in detections:
             x1, y1, x2, y2 = det['bbox']
             object_center_x = (x1 + x2) / 2
@@ -362,7 +359,7 @@ class VehicleHandler:
         current_time = time.time()
 
         if not self.steering_state:
-            centered = self.steer_to_centre(detections, front_view)
+            centered = self.steer_to_centre(detections)
             if centered is True:
                 if not hasattr(self, 'center_start_timer'):
                     self.center_start_timer = current_time

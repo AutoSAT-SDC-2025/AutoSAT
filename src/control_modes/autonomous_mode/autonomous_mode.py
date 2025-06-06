@@ -53,6 +53,8 @@ class AutonomousMode(IControlMode):
 
         self.vehicle_handler = VehicleHandler(weights_path='assets/v5_model.pt', input_source='video', localizer=localization_manager, can_controller=self.can_controller, car_type = self.car_type)
         self.pedestrian_handler = PedestrianHandler(weights_path='assets/v5_model.pt', input_source='video', can_controller=self.can_controller, car_type = self.car_type)
+        self.car_seen = False
+        self.pedestrian_seen = False
 
     def adjust_steering(self, steering_angle):
         new_steering_angle = steering_angle * 576 / 90
@@ -84,9 +86,11 @@ class AutonomousMode(IControlMode):
                 saw_red_light = traffic_state['red_light']
                 speed_limit = traffic_state['speed_limit']
 
-                saw_car = any(det["class"] == "Car" for det in detections)
-                saw_pedestrian = any(det["class"] == "Person" for det in detections)
-
+                for det in detections:
+                    if det["class"] == "Car":
+                        self.saw_car = True
+                    if det["class"] == "Person":
+                        self.saw_pedestrian = True
 
                 self.renderer.render_lines(stitched)
                 self.renderer.render_objects(front_view)
@@ -99,7 +103,7 @@ class AutonomousMode(IControlMode):
                         else:
                             self.can_controller.set_throttle(0)
                             self.can_controller.set_break(100)
-                    elif saw_car and det["distance"] <= 10:
+                    elif self.saw_car and det["distance"] <= 10:
                         logging.info("Saw car, initializing overtake")
                         if self.location.x is None and self.location.y is None:
                             self.vehicle_handler.manual_main(front_view)
@@ -109,7 +113,7 @@ class AutonomousMode(IControlMode):
                             self.vehicle_handler.main(front_view)
                             if self.vehicle_handler.goal_reached(threshold=0.1):
                                 logging.info("Overtake completed, returning to original mode")
-                    elif saw_pedestrian and det["distance"] <= 2:
+                    elif self.saw_pedestrian and det["distance"] <= 2:
                         logging.info("Saw person, stopping car")
                         self.pedestrian_handler.main(front_view)
                         if self.pedestrian_handler.pedestrian_crossed():
