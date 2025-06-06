@@ -93,7 +93,7 @@ class PedestrianHandler:
             self.can_controller.set_steering(0)
         return "Continuing to drive"
 
-    def continue_driving(self):
+    """def continue_driving(self):
         if self.pedestrian_crossed():
             print("Continuing driving")
             if self.car_type == 'Hunter':
@@ -102,8 +102,7 @@ class PedestrianHandler:
             else:
                 self.can_controller.set_kart_gearbox(KartGearBox.forward)
                 self.can_controller.set_throttle(100)
-                self.can_controller.set_steering(0)
-
+                self.can_controller.set_steering(0)"""
 
     def main(self, front_view = None):
         initial_position_set = False
@@ -122,10 +121,8 @@ class PedestrianHandler:
 
             status = self.stop_car(detections)
             print(status)
-
             if self.pedestrian_crossed():
-                drive_status = handler.continue_driving()
-                print("Pedestrian crossed. Continuing to drive:", drive_status)
+                return
 
 if __name__ == "__main__":
     weights_path = "assets/v5_model.pt"
