@@ -84,14 +84,14 @@ class PedestrianHandler:
                     self.can_controller.set_break(100)
                 print("Stopped for pedestrian")
                 return True
-        if self.car_type == 'Hunter':
+        """if self.car_type == 'Hunter':
             self.can_controller.set_parking_mode(0)
             self.can_controller.set_steering_and_throttle(0, 300)
         else:
             self.can_controller.set_kart_gearbox(KartGearBox.forward)
             self.can_controller.set_throttle(100)
             self.can_controller.set_steering(0)
-        return "Continuing to drive"
+        return "Continuing to drive""""
 
     """def continue_driving(self):
         if self.pedestrian_crossed():
