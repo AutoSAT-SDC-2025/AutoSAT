@@ -1,7 +1,7 @@
 import logging
-import multiprocessing as mp
+#import multiprocessing as mp
 from .line_detection.LineDetection import LineFollowingNavigation
-from .localization import localization
+#from .localization import localization
 from .object_detection.ObjectDetection import ObjectDetection
 from ...camera.camera_controller import CameraController
 from ...car_variables import CarType, HunterControlMode, KartGearBox, LineDetectionDims
@@ -12,7 +12,7 @@ from ...can_interface.can_factory import select_can_controller_creator, create_c
 from ...util.Render import Renderer
 from .obstacle_avoidance.vehicle_handler import VehicleHandler
 from .obstacle_avoidance.pedestrian_handler import PedestrianHandler
-from ...misc import calculate_steering, calculate_throttle, controller_break_value, dead_man_switch, setup_listeners
+#from ...misc import calculate_steering, calculate_throttle, controller_break_value, dead_man_switch, setup_listeners
 
 def normalize_steering(angle_deg: float, max_output: float) -> float:
     # Clip the input angle to [-45, 45] for safety
@@ -46,7 +46,7 @@ class AutonomousMode(IControlMode):
         self.renderer = renderer if renderer is not None else Renderer()
 
         self.data_logger_manager = data_logger_manager
-
+        """
         localization_manager = mp.Manager()
         self.location = localization_manager.Namespace()
         self.location.x = 0
@@ -54,9 +54,9 @@ class AutonomousMode(IControlMode):
         self.location.theta = 0
         self.location.img = None
         self.localization_process = mp.Process(target=localization.localization_worker, args=(self.location,))
-        self.localization_process.start()
+        self.localization_process.start()"""
 
-        self.vehicle_handler = VehicleHandler(weights_path='assets/v5_model.pt', input_source='video', localizer=localization_manager, can_controller=self.can_controller, car_type = self.car_type)
+        self.vehicle_handler = VehicleHandler(weights_path='assets/v5_model.pt', input_source='video', localizer=None, can_controller=self.can_controller, car_type = self.car_type)
         self.pedestrian_handler = PedestrianHandler(weights_path='assets/v5_model.pt', input_source='video', can_controller=self.can_controller, car_type = self.car_type)
         self.saw_car = False
         self.saw_pedestrian = False
@@ -78,7 +78,7 @@ class AutonomousMode(IControlMode):
                 stitched = self.camera_controller.get_stitched_image()
                 front_view = self.camera_controller.get_front_view()
 
-                self.location.img = front_view
+                #self.location.img = front_view
 
                 self.renderer.clear()
 
@@ -130,8 +130,8 @@ class AutonomousMode(IControlMode):
                         self.pedestrian_handler.continue_driving()
                 else:
                     logging.info(f"Speed: {speed}, Steering: {steering_angle}")
-                    logging.info(f"X: {self.location.x} Y: {self.location.y} THETA: {self.location.theta}")
-                    self.data_logger_manager.add_location_data(self.location.x, self.location.y, self.location.theta)
+                    #logging.info(f"X: {self.location.x} Y: {self.location.y} THETA: {self.location.theta}")
+                    #self.data_logger_manager.add_location_data(self.location.x, self.location.y, self.location.theta)
 
                     if self.car_type == CarType.hunter:
                         normalized_steering = -normalize_steering(steering_angle, 576)
@@ -152,8 +152,8 @@ class AutonomousMode(IControlMode):
         logging.info("Stopping autonomous mode.")
         self.camera_controller.disable_cameras()
         self.camera_controller = None
-        self.localization_process.terminate()
-        self.localization_process.join()
+        #self.localization_process.terminate()
+        #self.localization_process.join()
         if self.car_type == CarType.hunter:
             self.can_controller.set_control_mode(HunterControlMode.idle_mode)
         else:
