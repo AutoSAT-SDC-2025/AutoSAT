@@ -83,8 +83,9 @@ class AutonomousMode(IControlMode):
 
                 saw_red_light = traffic_state['red_light']
                 speed_limit = traffic_state['speed_limit']
-                saw_car = any(det["label"] == "Car" for det in detections)
-                saw_pedestrian = any(det["label"] == "Person" for det in detections)
+
+                saw_car = any(det["class"] == "Car" for det in detections)
+                saw_pedestrian = any(det["class"] == "Person" for det in detections)
 
 
                 self.renderer.render_lines(stitched)
