@@ -137,7 +137,7 @@ class AutonomousMode(IControlMode):
                     self.pedestrian_handler.main(front_view)
                     if self.pedestrian_handler.pedestrian_crossed():
                         logging.info("Pedestrian crossed, continue driving")
-                        self.pedestrian_handler.continue_driving()
+                        #self.pedestrian_handler.continue_driving()
                         if self.car_type == CarType.hunter:
                             normalized_steering = -normalize_steering(steering_angle, 576)
                             self.can_controller.set_steering_and_throttle(normalized_steering, 320)
