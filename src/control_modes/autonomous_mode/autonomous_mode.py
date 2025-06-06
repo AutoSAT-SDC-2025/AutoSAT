@@ -14,10 +14,10 @@ from .obstacle_avoidance.vehicle_handler import VehicleHandler
 from .obstacle_avoidance.pedestrian_handler import PedestrianHandler
 from ...misc import calculate_steering, calculate_throttle, controller_break_value, dead_man_switch, setup_listeners
 
-def normalize_steering(angle_deg: float) -> float:
-    # Clip angle to valid range first (just in case)
+def normalize_steering(angle_deg: float, max_output: float) -> float:
+    # Clip the input angle to [-45, 45] for safety
     angle_deg = max(min(angle_deg, 45), -45)
-    return (angle_deg / 45.0) * 1.25
+    return (angle_deg / 45.0) * max_output
 
 class AutonomousMode(IControlMode):
 
@@ -130,13 +130,14 @@ class AutonomousMode(IControlMode):
                         self.data_logger_manager.add_location_data(self.location.x, self.location.y, self.location.theta)
 
                         if self.car_type == CarType.hunter:
-                            self.can_controller.set_steering_and_throttle(-(steering_angle * 10), 320)
+                            normalized_steering = -normalize_steering(steering_angle, 576)
+                            self.can_controller.set_steering_and_throttle(normalized_steering, 320)
                             self.can_controller.set_parking_mode(0)
                         else:
                             self.can_controller.set_break(0)
                             self.can_controller.set_kart_gearbox(KartGearBox.forward)
                             self.can_controller.set_throttle(30)
-                            normalized_steering = normalize_steering(steering_angle)
+                            normalized_steering = normalize_steering(steering_angle, 1.25)
                             self.can_controller.set_steering(normalized_steering)
         except Exception as e:
             logging.error(f"Error in autonomous mode: {e}")
