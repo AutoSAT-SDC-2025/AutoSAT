@@ -342,7 +342,7 @@ class VehicleHandler:
                 self.can_controller.set_throttle(50)
             return self.centered
 
-    def scan_left(self):
+    """def scan_left(self):
         for scan in self.iter_scans():
             obstacle_found = False
             for angle, distance in scan:
@@ -356,7 +356,7 @@ class VehicleHandler:
                 self.car_passed = True
                 break
 
-            time.sleep(0.1)
+            time.sleep(0.1)"""
 
     def manual_main(self, front_view=None):
         traffic_state, detections, draw_instructions = self.object_detection.process(front_view)
@@ -412,7 +412,7 @@ class VehicleHandler:
 
             if (current_time - self.start_timer) >= 3 and not self.scan_started:
                 self.scan_started = True
-                self.scan_left()
+                self.car_passed = True
             if self.car_passed is True:
                 print("Car passed. Continuing steering sequence.")
                 if self.car_type == 'Hunter':
