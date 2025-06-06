@@ -20,7 +20,7 @@ class PedestrianHandler:
 
     def get_initial_position(self, detections):
         for det in detections:
-            if det["class"] == "Person":
+            if det["class"] == "person":
                 x1, _, x2, _ = det["bbox"]
                 if (x1 + x2) / 2 < CameraResolution.WIDTH / 2:
                     self.initial_position = "Left"
@@ -29,7 +29,7 @@ class PedestrianHandler:
 
     def get_direction(self, detections):
         for det in detections:
-            if det["class"] == "Person":
+            if det["class"] == "person":
                 x1, y1, x2, y2 = det["bbox"]
                 x_center = (x1 + x2) / 2
                 obj_id = "Person"
@@ -55,7 +55,7 @@ class PedestrianHandler:
 
     def get_current_pos(self, detections):
         for det in detections:
-            if det["class"] == "Person":
+            if det["class"] == "person":
                 x_center = (det["bbox"][0] + det["bbox"][2]) / 2
                 print(x_center)
                 if x_center < CameraResolution.WIDTH / 2:
@@ -75,7 +75,7 @@ class PedestrianHandler:
 
     def stop_car(self, object_detections):
         for obj in object_detections:
-            if obj["class"] == "Person" and 0 < obj["distance"] < self.person_distance_threshold:
+            if obj["class"] == "person" and 0 < obj["distance"] < self.person_distance_threshold:
                 self.can_controller.set_steering_and_throttle(0, 0)
                 self.can_controller.set_parking_mode(1)
                 print("Stopped for pedestrian")

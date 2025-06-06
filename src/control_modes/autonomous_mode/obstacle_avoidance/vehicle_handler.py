@@ -91,7 +91,7 @@ class VehicleHandler:
             return x_vals, y_vals
 
     def set_goal(self, det, x, y, theta):
-        if det["class"] == "Car" and self.goal_set is False:
+        if det["class"] == "car" and self.goal_set is False:
             distance_offset = 12.0
             x_goal = x
             y_goal = det["distance"] + distance_offset + y
@@ -99,7 +99,7 @@ class VehicleHandler:
             goal = (x_goal, y_goal, theta)
             print(f"Goal set to: {goal} at distance {det['distance']:.2f}m")
             return goal
-        elif det["class"] == "Car" and self.goal_set is True:
+        elif det["class"] == "car" and self.goal_set is True:
             print("Goal is already set.")
         else:
             print("No suitable car detected to set goal.")
@@ -108,7 +108,7 @@ class VehicleHandler:
     def set_obstacles(self, detections, x, y):
         obstacles = []
         for det in detections:
-            if det["class"] == "Car":
+            if det["class"] == "car":
                 obstacles.append((-1.25 + x, det["distance"] + y, 2.5, 4))
         return obstacles
 
