@@ -1,10 +1,11 @@
 from src.util.video import get_camera_config
 from ..object_detection.Detection import ObjectDetection
-from ....car_variables import CameraResolution
+from ....car_variables import CameraResolution, KartGearBox
 
 class PedestrianHandler:
-    def __init__(self, weights_path = None, input_source = None, can_controller = None):
+    def __init__(self, weights_path = None, input_source = None, can_controller = None, car_type = None):
         self.can_controller = can_controller
+        self.car_type = car_type
         self.cams = get_camera_config()
         self.object_detection = ObjectDetection(weights_path, input_source)
         self.person_distance_threshold = 2
@@ -76,20 +77,33 @@ class PedestrianHandler:
     def stop_car(self, object_detections):
         for obj in object_detections:
             if obj["class"] == "person" and 0 < obj["distance"] < self.person_distance_threshold:
-                self.can_controller.set_steering_and_throttle(0, 0)
-                self.can_controller.set_parking_mode(1)
+                if self.car_type == 'Hunter':
+                    self.can_controller.set_steering_and_throttle(0, 0)
+                    self.can_controller.set_parking_mode(1)
+                else:
+                    self.can_controller.set_break(100)
                 print("Stopped for pedestrian")
                 return True
-        self.can_controller.set_parking_mode(0)
-        self.can_controller.set_steering_and_throttle(0, 300)
+        if self.car_type == 'Hunter':
+            self.can_controller.set_parking_mode(0)
+            self.can_controller.set_steering_and_throttle(0, 300)
+        else:
+            self.can_controller.set_kart_gearbox(KartGearBox.forward)
+            self.can_controller.set_throttle(100)
+            self.can_controller.set_steering(0)
         return "Continuing to drive"
 
     def continue_driving(self):
         if self.pedestrian_crossed():
             print("Continuing driving")
-            ped_parking_mode = self.can_controller.set_parking_mode(0)
-            ped_driving_mode = self.can_controller.set_steering_and_throttle(0, 300)
-            return ped_driving_mode, ped_parking_mode
+            if self.car_type == 'Hunter':
+                self.can_controller.set_parking_mode(0)
+                self.can_controller.set_steering_and_throttle(0, 300)
+            else:
+                self.can_controller.set_kart_gearbox(KartGearBox.forward)
+                self.can_controller.set_throttle(100)
+                self.can_controller.set_steering(0)
+
 
     def main(self, front_view = None):
         initial_position_set = False

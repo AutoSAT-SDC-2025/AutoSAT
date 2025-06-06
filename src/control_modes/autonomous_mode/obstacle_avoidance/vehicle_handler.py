@@ -3,18 +3,20 @@ from src.util.video import get_camera_config
 from ..localization.localization import Localizer
 from ..object_detection.Detection import ObjectDetection
 from ..line_detection.LineDetection import LineFollowingNavigation
-from ....car_variables import CameraResolution
+from ....car_variables import CameraResolution, KartGearBox
 from rplidar import RPLidar
 from math import floor
-#import cv2
+# import cv2
 import math
 import matplotlib.pyplot as plt
 import numpy as np
+import time
 
 class VehicleHandler:
-    def __init__(self, weights_path = None, input_source = None, localizer = None, can_controller = None):
+    def __init__(self, weights_path=None, input_source=None, localizer=None, can_controller=None, car_type = None):
         self.localizer = localizer
         self.can_controller = can_controller
+        self.car_type = car_type
         self.cams = get_camera_config()
         self.object_detection = ObjectDetection(weights_path, input_source)
         self.lane_navigator = LineFollowingNavigation()
@@ -24,6 +26,13 @@ class VehicleHandler:
         self.goal_set = False
         self.path_found = False
         self.goal = None
+        self.center_start_timer = None
+        self.centered = False
+        self.steering_state = None
+        self.start_timer = None
+        self.scan_started = False
+        self.car_passed = False
+        self.overtake_completed = False
 
     def is_actual_waypoint(self, point, waypoints, threshold=0.05):
         for wp in waypoints:
@@ -38,7 +47,10 @@ class VehicleHandler:
         return False
 
     def set_waypoints(self, x, y):
-        waypoints = [[-0.25 + x, 0.75 + y], [-0.5 + x, 1 + y], [-0.75 + x, 1.25 + y], [-1 + x, 1.5 + y], [-1.5 + x, 1.75 + y], [-2 + x, 2 + y], [-2.25 + x, 2.5 + y], [-2.5 + x, 3 + y], [-2.5 + x, 14 + y], [-2.25 + x, 15 + y], [-2 + x, 16 + y], [-1.5 + x, 16.5 + y], [-1 + x, 17 + y], [-0.75 + x, 17.5 + y], [-0.5 + x, 18 + y]]
+        waypoints = [[-0.25 + x, 0.75 + y], [-0.5 + x, 1 + y], [-0.75 + x, 1.25 + y], [-1 + x, 1.5 + y],
+                     [-1.5 + x, 1.75 + y], [-2 + x, 2 + y], [-2.25 + x, 2.5 + y], [-2.5 + x, 3 + y], [-2.5 + x, 14 + y],
+                     [-2.25 + x, 15 + y], [-2 + x, 16 + y], [-1.5 + x, 16.5 + y], [-1 + x, 17 + y],
+                     [-0.75 + x, 17.5 + y], [-0.5 + x, 18 + y]]
         return waypoints
 
     def set_rrt(self, goal, detections, waypoints):
@@ -83,7 +95,8 @@ class VehicleHandler:
 
             filtered_path = []
             for node in path:
-                if self.is_actual_waypoint([node.x, node.y], waypoints) or not self.is_too_close_to_predefined([node.x, node.y], waypoints):
+                if self.is_actual_waypoint([node.x, node.y], waypoints) or not self.is_too_close_to_predefined(
+                        [node.x, node.y], waypoints):
                     filtered_path.append(node)
 
             x_vals = [node.x if hasattr(node, "x") else node[0] for node in filtered_path]
@@ -139,11 +152,14 @@ class VehicleHandler:
         new_steering_angle = steering_angle * 576 / 90
         return max(min(new_steering_angle, 576), -576)
 
-    def set_steering_angle(self, angle_difference):
+    def set_steering_angle(self, angle_difference, steering_angle = None):
         angle_in_degrees = math.degrees(angle_difference)
         new_steering_angle = self.adjust_steering(angle_in_degrees)
         print(f"Steering angle diff (deg): {angle_in_degrees:.2f}, Command: {new_steering_angle:.2f}")
-        self.can_controller.set_steering_and_throttle(new_steering_angle, 300)
+        if self.car_type == 'Hunter':
+            self.can_controller.set_steering_and_throttle(new_steering_angle, 300)
+        else:
+            self.can_controller.set_steering(steering_angle)
 
     def steer_toward_waypoint(self, waypoint):
         current_x = self.localizer.x
@@ -213,12 +229,15 @@ class VehicleHandler:
     def check_collision(self, closest_distance):
         if closest_distance < 500:
             print("Collision detected, stopping the car")
-            self.can_controller.set_steering_and_throttle(0, 0)
+            if self.car_type == 'Hunter':
+                self.can_controller.set_steering_and_throttle(0, 0)
+            else:
+                self.can_controller.set_break(100)
             self.collision = True
             return True
         return False
 
-    def main(self, front_view = None):
+    def main(self, front_view=None):
 
         frame, detections = self.object_detection.detect_objects(front_view)
 
@@ -263,7 +282,7 @@ class VehicleHandler:
                     result = self.set_rrt(self.goal, detections, waypoints)
                     if result:
                         self.x_vals, self.y_vals = result
-                        #self.plot_waypoints(self.goal, detections, self.x_vals, self.y_vals)
+                        # self.plot_waypoints(self.goal, detections, self.x_vals, self.y_vals)
                         self.path_found = True
                         self.detections = detections
 
@@ -281,7 +300,149 @@ class VehicleHandler:
         if self.goal_set and self.path_found and not self.x_vals:
             if self.goal_reached():
                 print("Final goal reached!")
-                self.can_controller.set_steering_and_throttle(0, 0)
+                if self.car_type == 'Hunter':
+                    self.can_controller.set_steering_and_throttle(0, 0)
+                else:
+                    self.can_controller.set_steering(0)
+                    self.can_controller.set_throttle(50)
+
+    def steer_to_centre(self, detections=None, front_view=None):
+        if not detections or not front_view:
+            return False
+
+        for det in detections:
+            x1, y1, x2, y2 = det['bbox']
+            object_center_x = (x1 + x2) / 2
+            screen_center_x = CameraResolution.WIDTH / 2
+            offset = object_center_x - screen_center_x
+
+            Kp = 0.5
+            steering_angle = Kp * offset
+            MAX_STEERING_ANGLE = 576  # Maximum steering angle in CAN units
+            steering_angle = max(min(steering_angle, MAX_STEERING_ANGLE), -MAX_STEERING_ANGLE)
+
+            DEADZONE = 10  # Pixels
+            if abs(steering_angle) < DEADZONE:
+                print("Vehicle centered. Stopping steering adjustments.")
+                steering_angle = 0
+                self.centered = True
+            else:
+                self.centered = False
+                if offset > 0:
+                    print(f"Steering right by {steering_angle} CAN units.")
+                else:
+                    print(f"Steering left by {steering_angle} CAN units.")
+            if self.car_type == 'Hunter':
+                self.can_controller.set_steering_and_throttle(steering_angle, 300)
+            else:
+                self.can_controller.set_steering(steering_angle)
+                self.can_controller.set_throttle(50)
+            return self.centered
+
+    def scan_left(self):
+        for scan in self.iter_scans():
+            obstacle_found = False
+            for angle, distance in scan:
+                if 250 <= angle <= 290 and 0 < distance < 4000:
+                    obstacle_found = True
+                    print("Obstacle detected on the left. Continuing scan...")
+                    break
+
+            if not obstacle_found:
+                print("No obstacle on the left. Stopping scan.")
+                self.car_passed = True
+                break
+
+            time.sleep(0.1)
+
+    def manual_main(self, front_view=None):
+        traffic_state, detections, draw_instructions = self.object_detection.process(front_view)
+        current_time = time.time()
+
+        if not self.steering_state:
+            centered = self.steer_to_centre(detections, front_view)
+            if centered is True:
+                if not hasattr(self, 'center_start_timer'):
+                    self.center_start_timer = current_time
+                elif (current_time - self.center_start_timer) >= 0.5:
+                    print("Vehicle centered. Starting steering sequence.")
+                    self.steering_state = 'Left'
+                    self.start_timer = current_time
+            else:
+                self.center_start_timer = None
+            return
+        if self.centered is True:
+            # Steer to the left
+            if self.car_type == 'Hunter':
+                self.can_controller.set_steering_and_throttle(-100, 300)
+            else:
+                self.can_controller.set_kart_gearbox(KartGearBox.forward)
+                self.can_controller.set_throttle(50)
+                self.can_controller.set_steering(-1.25) # max steering is between -1.25 and 1.25
+            self.steering_state = 'Left'
+            self.start_timer = current_time
+
+        elif self.steering_state == 'Left' and (current_time - self.start_timer) >= 1:
+            # Steer to the right
+            if self.car_type == 'Hunter':
+                self.can_controller.set_steering_and_throttle(100, 300)
+            else:
+                self.can_controller.set_kart_gearbox(KartGearBox.forward)
+                self.can_controller.set_throttle(50)
+                self.can_controller.set_steering(1.25)
+            self.steering_state = 'Right'
+            self.start_timer = time.time()
+
+        elif self.steering_state == 'Right' and (current_time - self.start_timer) >= 1:
+            if self.car_type == 'Hunter':
+                self.can_controller.set_steering_and_throttle(0, 300)
+            else:
+                self.can_controller.set_steering_and_throttle(KartGearBox.forward)
+                self.can_controller.set_throttle(100)
+                self.can_controller.set_steering(0)
+            self.steering_state = 'Switched'
+            self.start_timer = time.time()
+            self.scan_started = False
+
+        elif self.steering_state == 'Switched':
+            self.can_controller.set_steering_and_throttle(0, 300)
+
+            if (current_time - self.start_timer) >= 3 and not self.scan_started:
+                self.scan_started = True
+                self.scan_left()
+            if self.car_passed is True:
+                print("Car passed. Continuing steering sequence.")
+                if self.car_type == 'Hunter':
+                    self.can_controller.set_steering_and_throttle(100, 300)
+                else:
+                    self.can_controller.set_kart_gearbox(KartGearBox.forward)
+                    self.can_controller.set_throttle(50)
+                    self.can_controller.set_steering(1.25)
+                self.steering_state = 'Right'
+                self.start_timer = time.time()
+            else:
+                print("Waiting for car to pass...")
+
+        elif self.steering_state == 'Right' and self.car_passed is True and (current_time - self.start_timer) >= 1:
+            if self.car_type == 'Hunter':
+                self.can_controller.set_steering_and_throttle(-100, 300)
+            else:
+                self.can_controller.set_kart_gearbox(KartGearBox.forward)
+                self.can_controller.set_throttle(50)
+                self.can_controller.set_steering(-1.25)
+            self.steering_state = 'Left'
+            self.start_timer = time.time()
+
+        elif self.steering_state == 'Left' and self.car_passed is True and (current_time - self.start_timer) >= 1:
+            if self.car_type == 'Hunter':
+                self.can_controller.set_steering_and_throttle(0, 300)
+            else:
+                self.can_controller.set_kart_gearbox(KartGearBox.forward)
+                self.can_controller.set_throttle(100)
+                self.can_controller.set_steering(0)
+            self.steering_state = 'Done'
+            self.overtake_completed = True
+
 
 if __name__ == '__main__':
     weights_path = "assets/v5_model.pt"
@@ -289,4 +450,4 @@ if __name__ == '__main__':
 
     localizer = Localizer()
     vehicle_handler = VehicleHandler(weights_path, input_source, localizer)
-    vehicle_handler.main()
+    vehicle_handler.manual_main()
