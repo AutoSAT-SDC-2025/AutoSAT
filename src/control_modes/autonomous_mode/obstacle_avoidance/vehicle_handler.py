@@ -309,6 +309,10 @@ class VehicleHandler:
                     self.can_controller.set_throttle(50)
 
     def steer_to_centre(self, detections=None):
+        if not detections:
+            print("No detections available for steering.")
+            return False
+
         for det in detections:
             x1, y1, x2, y2 = det['bbox']
             object_center_x = (x1 + x2) / 2
@@ -342,7 +346,7 @@ class VehicleHandler:
         for scan in self.iter_scans():
             obstacle_found = False
             for angle, distance in scan:
-                if angle == 270 and 0 < distance < 4000:
+                if angle == 270 and distance < 4000:
                     obstacle_found = True
                     print("Obstacle detected on the left. Continuing scan...")
                     break
