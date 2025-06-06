@@ -147,7 +147,7 @@ class Localizer:
         img = cv.GaussianBlur(img,(5,5),0)
         # img = cv.GaussianBlur(img,(15,15),0)
         img = cv.resize(img, None, fx=self.scale, fy=self.scale, interpolation= cv.INTER_LINEAR)
-        cv.imshow("Localization topdown view", img)
+        # cv.imshow("Localization topdown view", img)
         return img
 
 def localization_worker(shared):
@@ -159,7 +159,7 @@ def localization_worker(shared):
             img = shared.img.copy()
             frame = cv.resize(img, (848, 480))
             lane = lane_detector(frame)
-            cv.imshow("lane", lane)
+            # cv.imshow("lane", lane)
             localizer.update(img, lane)
             shared.x = localizer.x
             shared.y = localizer.y
