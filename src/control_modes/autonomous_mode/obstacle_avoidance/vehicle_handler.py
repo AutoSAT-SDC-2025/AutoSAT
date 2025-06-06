@@ -141,7 +141,7 @@ class VehicleHandler:
     def calculate_angle(self, x, y, waypoint):
         dx = waypoint[0] - x
         dy = waypoint[1] - y
-        angle = math.atan2(dy, dx)
+        angle = round(math.atan2(dy, dx))
         return angle
 
     def angle_difference(self, desired_theta, current_theta):
@@ -149,8 +149,10 @@ class VehicleHandler:
         return -((diff + math.pi) % (2 * math.pi) - math.pi)
 
     def adjust_steering(self, steering_angle):
-        new_steering_angle = steering_angle * 576 / 90
-        return max(min(new_steering_angle, 576), -576)
+        if self.car_type == 'Hunter':
+            new_steering_angle = round(steering_angle * 576 / 90)
+
+            return max(round(min(new_steering_angle, 576), -576))
 
     def set_steering_angle(self, angle_difference, steering_angle = None):
         angle_in_degrees = math.degrees(angle_difference)
@@ -317,9 +319,9 @@ class VehicleHandler:
             offset = object_center_x - screen_center_x
 
             Kp = 0.5
-            steering_angle = Kp * offset
+            steering_angle = round(Kp * offset)
             MAX_STEERING_ANGLE = 576  # Maximum steering angle in CAN units
-            steering_angle = max(min(steering_angle, MAX_STEERING_ANGLE), -MAX_STEERING_ANGLE)
+            steering_angle = max(round(min(steering_angle, MAX_STEERING_ANGLE), -MAX_STEERING_ANGLE))
 
             DEADZONE = 10  # Pixels
             if abs(steering_angle) < DEADZONE:

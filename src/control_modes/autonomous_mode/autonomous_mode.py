@@ -93,8 +93,6 @@ class AutonomousMode(IControlMode):
                 for det in detections:
                     if saw_red_light and det["distance"] <= 2:
                         logging.info("Saw red light, stopping.")
-
-
                         if self.car_type == CarType.hunter:
                             self.can_controller.set_steering_and_throttle(0, 0)
                             self.can_controller.set_parking_mode(1)
