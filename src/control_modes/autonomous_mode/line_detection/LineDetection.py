@@ -6,14 +6,22 @@ enable_debug = False
 
 
 class LineFollowingNavigation:
-    def __init__(self, width=848, height=480, scale=1):
+    def __init__(self, width=848, height=480, scale=1, mode='normal'):
         self.width = width
         self.height = height
         self.scale = scale
+        self.mode = mode  # 'normal', 'left_parallel', 'right_parallel'
         # Memory for line tracking
         self.prev_left_line = None
         self.prev_right_line = None
         self.frame_count = 0
+
+    def set_mode(self, mode):
+        """Set the driving mode."""
+        if mode in ['normal', 'left_parallel', 'right_parallel']:
+            self.mode = mode
+        else:
+            raise ValueError("Mode must be 'normal', 'left_parallel', or 'right_parallel'")
 
     def detect_white_lines(self, img):
         """Simple and effective white line detection."""
@@ -394,70 +402,79 @@ class LineFollowingNavigation:
         return target, visuals
 
     def calculateSteeringAngle(self, target, left_lines=None, right_lines=None, mid_point=None):
-        """Calculate steering angle based on detected lines and target."""
+        """Calculate steering angle based on detected lines, target, and driving mode."""
         if mid_point is None:
             mid_point = self.width / 2
 
-        max_angle = 45.0  # Increased for sharper turns
+        max_angle = 45.0
 
-        # Case 1: Both lines detected - steer toward center of lane
-        if left_lines and right_lines and len(left_lines) > 0 and len(right_lines) > 0:
-            # Calculate offset from center
-            offset = target - mid_point if target is not None else 0.0
-            # Convert to steering angle (proportional control)
-            steering_angle = (offset / (self.width / 2)) * max_angle
+        # Mode-specific steering calculations
+        if self.mode == 'left_parallel':
+            # Force left lane paralleling - only use left line if available
+            if left_lines and len(left_lines) > 0:
+                x1, y1, x2, y2 = left_lines[0]
+                line_angle = np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi
+                steering_angle = line_angle * 0.8
 
-        # Case 2: Only left line detected - drive parallel to left line
-        elif left_lines and len(left_lines) > 0 and (not right_lines or len(right_lines) == 0):
-            x1, y1, x2, y2 = left_lines[0]
+                # Maintain distance from left line
+                line_center_x = (x1 + x2) / 2
+                distance_from_line = line_center_x - mid_point
+                distance_correction = distance_from_line * 0.08
+                steering_angle += distance_correction
+            else:
+                # No left line found, try to estimate or go straight
+                steering_angle = 0.0
 
-            # Calculate line angle relative to horizontal
-            line_angle = np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi
+        elif self.mode == 'right_parallel':
+            # Force right lane paralleling - only use right line if available
+            if right_lines and len(right_lines) > 0:
+                x1, y1, x2, y2 = right_lines[0]
+                line_angle = np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi
+                steering_angle = line_angle * 0.8
 
-            # We want to drive parallel to the line, so use the line angle directly
-            # Scale it down for smoother control
-            steering_angle = line_angle * 0.8  # Increased responsiveness
+                # Maintain distance from right line
+                line_center_x = (x1 + x2) / 2
+                distance_from_line = line_center_x - mid_point
+                distance_correction = distance_from_line * 0.08
+                steering_angle += distance_correction
+            else:
+                # No right line found, try to estimate or go straight
+                steering_angle = 0.0
 
-            # Also consider distance from line to maintain safe distance
-            line_center_x = (x1 + x2) / 2
-            distance_from_line = line_center_x - mid_point
+        else:  # normal mode
+            # Original logic for normal mode
+            if left_lines and right_lines and len(left_lines) > 0 and len(right_lines) > 0:
+                offset = target - mid_point if target is not None else 0.0
+                steering_angle = (offset / (self.width / 2)) * max_angle
 
-            # If too close to left line, steer right; if too far, steer left
-            # For left line: positive distance means line is to the right of center
-            distance_correction = distance_from_line * 0.08  # Increased sensitivity
-            steering_angle += distance_correction
+            elif left_lines and len(left_lines) > 0 and (not right_lines or len(right_lines) == 0):
+                x1, y1, x2, y2 = left_lines[0]
+                line_angle = np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi
+                steering_angle = line_angle * 0.8
 
-        # Case 3: Only right line detected - drive parallel to right line
-        elif right_lines and len(right_lines) > 0 and (not left_lines or len(left_lines) == 0):
-            x1, y1, x2, y2 = right_lines[0]
+                line_center_x = (x1 + x2) / 2
+                distance_from_line = line_center_x - mid_point
+                distance_correction = distance_from_line * 0.08
+                steering_angle += distance_correction
 
-            # Calculate line angle relative to horizontal
-            line_angle = np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi
+            elif right_lines and len(right_lines) > 0 and (not left_lines or len(left_lines) == 0):
+                x1, y1, x2, y2 = right_lines[0]
+                line_angle = np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi
+                steering_angle = line_angle * 0.8
 
-            # We want to drive parallel to the line, so use the line angle directly
-            steering_angle = line_angle * 0.8  # Increased responsiveness
+                line_center_x = (x1 + x2) / 2
+                distance_from_line = line_center_x - mid_point
+                distance_correction = distance_from_line * 0.08
+                steering_angle += distance_correction
 
-            # Also consider distance from line to maintain safe distance
-            line_center_x = (x1 + x2) / 2
-            distance_from_line = line_center_x - mid_point
+            elif target is not None:
+                offset = target - mid_point
+                steering_angle = (offset / (self.width / 2)) * max_angle
+            else:
+                return 0.0
 
-            # If too close to right line, steer left; if too far, steer right
-            # For right line: negative distance means line is to the left of center
-            distance_correction = distance_from_line * 0.08  # Increased sensitivity
-            steering_angle += distance_correction
-
-        # Case 4: Target-based steering (fallback)
-        elif target is not None:
-            offset = target - mid_point
-            steering_angle = (offset / (self.width / 2)) * max_angle
-
-        else:
-            # No lines and no target - return 0
-            return 0.0
-
-        # Limit steering angle but allow larger range for sharp turns
+        # Limit steering angle
         steering_angle = max(min(steering_angle, max_angle), -max_angle)
-
         return steering_angle
 
     def calculateSpeed(self, steering_angle, base_speed=100):
@@ -484,11 +501,79 @@ class LineFollowingNavigation:
         final_left = [best_left] if best_left is not None else []
         final_right = [best_right] if best_right is not None else []
 
+        # Add line visuals
+        if draw:
+            # Add all detected raw lines (thin yellow)
+            if raw_lines is not None:
+                for line in raw_lines:
+                    x1, y1, x2, y2 = line[0]
+                    visuals.append({
+                        'type': 'line',
+                        'start': (x1, y1),
+                        'end': (x2, y2),
+                        'color': (0, 255, 255),  # Yellow
+                        'thickness': 1
+                    })
+
+            # Add filtered left lines (green)
+            for line in left_lines:
+                x1, y1, x2, y2 = line
+                visuals.append({
+                    'type': 'line',
+                    'start': (x1, y1),
+                    'end': (x2, y2),
+                    'color': (0, 255, 0),  # Green
+                    'thickness': 2
+                })
+
+            # Add filtered right lines (red)
+            for line in right_lines:
+                x1, y1, x2, y2 = line
+                visuals.append({
+                    'type': 'line',
+                    'start': (x1, y1),
+                    'end': (x2, y2),
+                    'color': (255, 0, 0),  # Red
+                    'thickness': 2
+                })
+
+            # Add best lines (thicker)
+            if best_left is not None:
+                x1, y1, x2, y2 = best_left
+                visuals.append({
+                    'type': 'line',
+                    'start': (x1, y1),
+                    'end': (x2, y2),
+                    'color': (0, 255, 0),  # Bright green
+                    'thickness': 4
+                })
+
+            if best_right is not None:
+                x1, y1, x2, y2 = best_right
+                visuals.append({
+                    'type': 'line',
+                    'start': (x1, y1),
+                    'end': (x2, y2),
+                    'color': (255, 0, 0),  # Bright red
+                    'thickness': 4
+                })
+
         steering_angle = self.calculateSteeringAngle(target, final_left, final_right)
         speed = self.calculateSpeed(steering_angle, base_speed)
 
         if target is not None:
-            text = f"Steering: {steering_angle:.1f} | Speed: {speed:.1f}"
+            text = f"Mode: {self.mode} | Steering: {steering_angle:.1f} | Speed: {speed:.1f}"
+            visuals.append({
+                'type': 'text',
+                'text': text,
+                'position': (10, 30),
+                'font': 'FONT_HERSHEY_SIMPLEX',
+                'font_scale': 0.7,
+                'color': (255, 255, 255),
+                'thickness': 2
+            })
+        else:
+            text = f"Mode: {self.mode} | No target detected"
             visuals.append({
                 'type': 'text',
                 'text': text,

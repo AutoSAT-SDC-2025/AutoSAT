@@ -31,7 +31,7 @@ def main(weights_path: str, input_source: str, image_folder: str):
 
     object_detector = ObjectDetection(weights_path, input_source)
     traffic_manager = TrafficManager()
-    line_detection = LineFollowingNavigation(width=WIDTH, height=HEIGHT)
+    line_detection = LineFollowingNavigation(width=WIDTH, height=HEIGHT, mode='normal')
     renderer = Renderer()
 
     while True:
@@ -44,7 +44,7 @@ def main(weights_path: str, input_source: str, image_folder: str):
 
         renderer.clear()
         traffic_state, detections, object_visuals = object_detector.process(frame)
-        renderer.add_drawings(object_visuals)
+        renderer.add_drawings_objectdetection(object_visuals)
 
 
        # iterate over detections
@@ -54,9 +54,11 @@ def main(weights_path: str, input_source: str, image_folder: str):
 
         # Uncomment if you want line detection visuals
         steering_angle, speed, line_visuals = line_detection.process(frame)
-        renderer.add_drawings(line_visuals)
+        renderer.add_drawings_linedetection(line_visuals)
+        renderer.render_lines(frame)
+        new_frame = renderer.get_last_linedetection_image()
 
-        renderer.render(frame)
+        cv2.imshow("Frame", new_frame)
 
         # Auto-play: wait 20ms and advance, else wait indefinitely
         key = cv2.waitKey(20 if playing else 0)
