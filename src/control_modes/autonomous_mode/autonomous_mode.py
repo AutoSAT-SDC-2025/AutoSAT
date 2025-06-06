@@ -53,8 +53,8 @@ class AutonomousMode(IControlMode):
 
         self.vehicle_handler = VehicleHandler(weights_path='assets/v5_model.pt', input_source='video', localizer=localization_manager, can_controller=self.can_controller, car_type = self.car_type)
         self.pedestrian_handler = PedestrianHandler(weights_path='assets/v5_model.pt', input_source='video', can_controller=self.can_controller, car_type = self.car_type)
-        self.car_seen = False
-        self.pedestrian_seen = False
+        self.saw_car = False
+        self.saw_pedestrian = False
 
     def adjust_steering(self, steering_angle):
         new_steering_angle = steering_angle * 576 / 90
