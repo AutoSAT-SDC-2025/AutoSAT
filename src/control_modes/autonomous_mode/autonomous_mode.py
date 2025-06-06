@@ -97,8 +97,8 @@ class AutonomousMode(IControlMode):
                             self.can_controller.set_steering_and_throttle(0, 0)
                             self.can_controller.set_parking_mode(1)
                         else:
-                            self.can_controller.set_throttle(0.0)
-                            self.can_controller.set_break(100.0)
+                            self.can_controller.set_throttle(0)
+                            self.can_controller.set_break(100)
                     elif saw_car and det["distance"] <= 10:
                         logging.info("Saw car, initializing overtake")
                         if self.location.x is None and self.location.y is None:
