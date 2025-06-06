@@ -200,7 +200,7 @@ class ControlManager:
                 self.controller = ManualMode(self.car_type)
             else:
                 logger.info("Starting autonomous mode...")
-                self.controller = AutonomousMode(self.car_type, self.camera_controller, self.renderer, self.data_logger_manager)
+                self.controller = AutonomousMode(car_type=self.car_type,use_checkpoint_mode=False, camera_controller= self.camera_controller, renderer= self.renderer, data_logger_manager= self.data_logger_manager)
 
             setup_listeners(self.controller.can_controller, self.car_type)
             logger.info(f"CAN listeners registered for {self.car_type} controller")
