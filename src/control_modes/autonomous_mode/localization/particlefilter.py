@@ -14,7 +14,7 @@ class ParticleFilter:
         current_file = Path(__file__).resolve()
         project_root = current_file.parents[3]  # adjust this number as needed
         config = configparser.ConfigParser()
-        config.read(project_root/"configs"/"configs.ini")
+        config.read(project_root/"config"/"config.ini")
         std_x = float(config["ParticleFilter"]["std_x"])
         std_y = float(config["ParticleFilter"]["std_y"])
         std_theta = float(config["ParticleFilter"]["std_theta"])
