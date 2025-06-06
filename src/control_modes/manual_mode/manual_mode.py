@@ -22,6 +22,7 @@ class ManualMode(IControlMode):
 
         self.steering = 0.0
         self.throttle = 0.0
+        self.gear = KartGearBox.neutral
         self.park = True
 
         if Gamepad.available():
@@ -34,7 +35,8 @@ class ManualMode(IControlMode):
             self.gamepad.addAxisMovedHandler(ControllerMapping.park, self.handle_park)
 
             self.gamepad.addButtonPressedHandler(ControllerMapping.buttonExit, self.stop_manual_mode)
-
+            self.gamepad.addButtonPressedHandler(ControllerMapping.forward, self.handle_forward)
+            self.gamepad.addButtonPressedHandler(ControllerMapping.reverse, self.handle_reverse)
             self.gamepad.rumble(strong_magnitude=30000, weak_magnitude=30000, duration_ms=1000)
         else:
             logging.info('Controller not connected :(')
@@ -53,6 +55,14 @@ class ManualMode(IControlMode):
         trigger_threshold = -0.8
         self.park = True if value > trigger_threshold else False
 
+    def handle_forward(self):
+        """Callback for forward axis changes"""
+        self.gear = KartGearBox.forward
+
+    def handle_reverse(self):
+        """Callback for backward axis changes"""
+        self.gear = KartGearBox.backward
+
     def start(self) -> None:
         """Start manual mode."""
         logging.info("Starting manual mode...")
@@ -64,7 +74,7 @@ class ManualMode(IControlMode):
                     self.can_controller.set_steering_and_throttle(self.steering, self.throttle)
                     self.can_controller.set_parking_mode(self.park)
                 elif self.car_type == CarType.kart:
-                    self.can_controller.set_kart_gearbox(KartGearBox.forward)
+                    self.can_controller.set_kart_gearbox(self.gear)
                     self.can_controller.set_throttle(self.throttle)
                     self.can_controller.set_steering(self.steering)
                     self.can_controller.set_break(controller_break_value(self.gamepad))
