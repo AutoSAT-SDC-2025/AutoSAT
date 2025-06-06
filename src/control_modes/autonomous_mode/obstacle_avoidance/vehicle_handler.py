@@ -342,7 +342,7 @@ class VehicleHandler:
         for scan in self.iter_scans():
             obstacle_found = False
             for angle, distance in scan:
-                if 250 <= angle <= 290 and 0 < distance < 4000:
+                if angle == 270 and 0 < distance < 4000:
                     obstacle_found = True
                     print("Obstacle detected on the left. Continuing scan...")
                     break
