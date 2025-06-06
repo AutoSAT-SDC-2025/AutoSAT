@@ -59,12 +59,8 @@ class KartCANController(ICanController):
     def set_throttle(self, throttle_value: float) -> None:
         if throttle_value == self.__throttle_value:
             return
-        if throttle_value < 0.0:
-            self.__throttle_value = throttle_value
-            self.__throttle_message.data = [int(-throttle_value), 0, self.__kart_gearbox.backward, 0, 0, 0, 0, 0]
-            self.__throttle_task.modify_data(self.__throttle_message)
         self.__throttle_value = throttle_value
-        self.__throttle_message.data = [int(throttle_value), 0, self.__kart_gearbox.value, 0, 0, 0, 0, 0]
+        self.__throttle_message.data = [int(self.__throttle_value), 0, self.__kart_gearbox.value, 0, 0, 0, 0, 0]
         self.__throttle_task.modify_data(self.__throttle_message)
 
     def set_break(self, break_value: int) -> None:
