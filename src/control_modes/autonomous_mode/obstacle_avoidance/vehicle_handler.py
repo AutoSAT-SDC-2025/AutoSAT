@@ -360,6 +360,9 @@ class VehicleHandler:
 
     def manual_main(self, front_view=None):
         traffic_state, detections, draw_instructions = self.object_detection.process(front_view)
+        print(f"Detections type: {type(detections)}")
+        print(f"Detections content: {detections}")
+
         current_time = time.time()
 
         if not self.steering_state:

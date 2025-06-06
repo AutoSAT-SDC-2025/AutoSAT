@@ -91,54 +91,58 @@ class AutonomousMode(IControlMode):
                 saw_red_light = traffic_state['red_light']
                 speed_limit = traffic_state['speed_limit']
 
+                car_in_range = False
+                pedestrian_in_range = False
+                red_light_in_range = False
+
                 for det in detections:
-                    if det["class"] == "Car":
+                    distance = det.get("distance", float('inf'))
+                    obj_class = det.get("class", "")
+                    if obj_class == "Car" and distance <= 10:
+                        car_in_range = True
                         self.saw_car = True
-                    if det["class"] == "Person":
+                    elif obj_class == "Person" and distance <= 2:
+                        pedestrian_in_range = True
                         self.saw_pedestrian = True
+                    elif saw_red_light and distance <= 2:
+                        red_light_in_range = True
 
                 self.renderer.render_lines(stitched)
                 self.renderer.render_objects(front_view)
-                for det in detections:
-                    if saw_red_light and det["distance"] <= 2:
-                        logging.info("Saw red light, stopping.")
-                        if self.car_type == CarType.hunter:
-                            self.can_controller.set_steering_and_throttle(0, 0)
-                            self.can_controller.set_parking_mode(1)
-                        else:
-                            self.can_controller.set_throttle(0)
-                            self.can_controller.set_break(100)
-                    elif self.saw_car and det["distance"] <= 10:
-                        logging.info("Saw car, initializing overtake")
-                        if self.location.x is None and self.location.y is None:
-                            self.vehicle_handler.manual_main(front_view)
-                            if self.vehicle_handler.overtake_completed():
-                                logging.info("Overtake completed, returning to original mode")
-                        else:
-                            self.vehicle_handler.main(front_view)
-                            if self.vehicle_handler.goal_reached(threshold=0.1):
-                                logging.info("Overtake completed, returning to original mode")
-                    elif self.saw_pedestrian and det["distance"] <= 2:
-                        logging.info("Saw person, stopping car")
-                        self.pedestrian_handler.main(front_view)
-                        if self.pedestrian_handler.pedestrian_crossed():
-                            logging.info("Pedestrian crossed, continue driving")
-                            self.pedestrian_handler.continue_driving()
+                if red_light_in_range:
+                    logging.info("Saw red light, stopping.")
+                    if self.car_type == CarType.hunter:
+                        self.can_controller.set_steering_and_throttle(0, 0)
+                        self.can_controller.set_parking_mode(1)
                     else:
-                        logging.info(f"Speed: {speed}, Steering: {steering_angle}")
-                        logging.info(f"X: {self.location.x} Y: {self.location.y} THETA: {self.location.theta}")
-                        self.data_logger_manager.add_location_data(self.location.x, self.location.y, self.location.theta)
+                        self.can_controller.set_throttle(0)
+                        self.can_controller.set_break(100)
+                elif car_in_range:
+                    logging.info("Saw car, initializing overtake")
+                    self.vehicle_handler.manual_main(front_view)
+                    if self.vehicle_handler.overtake_completed():
+                        logging.info("Overtake completed, returning to original mode")
+                elif pedestrian_in_range:
+                    logging.info("Saw person, stopping car")
+                    self.pedestrian_handler.main(front_view)
+                    if self.pedestrian_handler.pedestrian_crossed():
+                        logging.info("Pedestrian crossed, continue driving")
+                        self.pedestrian_handler.continue_driving()
+                else:
+                    logging.info(f"Speed: {speed}, Steering: {steering_angle}")
+                    logging.info(f"X: {self.location.x} Y: {self.location.y} THETA: {self.location.theta}")
+                    self.data_logger_manager.add_location_data(self.location.x, self.location.y, self.location.theta)
 
-                        if self.car_type == CarType.hunter:
-                            normalized_steering = -normalize_steering(steering_angle, 576)
-                            self.can_controller.set_steering_and_throttle(normalized_steering, 320)
-                            self.can_controller.set_parking_mode(0)
-                        else:
-                            self.can_controller.set_break(0)
-                            self.can_controller.set_kart_gearbox(KartGearBox.forward)
-                            self.can_controller.set_throttle(30)
-                            normalized_steering = normalize_steering(steering_angle, 1.25)
-                            self.can_controller.set_steering(normalized_steering)
+                    if self.car_type == CarType.hunter:
+                        normalized_steering = -normalize_steering(steering_angle, 576)
+                        self.can_controller.set_steering_and_throttle(normalized_steering, 320)
+                        self.can_controller.set_parking_mode(0)
+                    else:
+                        self.can_controller.set_break(0)
+                        self.can_controller.set_kart_gearbox(KartGearBox.forward)
+                        self.can_controller.set_throttle(30)
+                        normalized_steering = normalize_steering(steering_angle, 1.25)
+                        self.can_controller.set_steering(normalized_steering)
         except Exception as e:
             logging.error(f"Error in autonomous mode: {e}")
         finally:
