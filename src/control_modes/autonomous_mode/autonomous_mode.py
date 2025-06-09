@@ -117,42 +117,19 @@ class AutonomousMode(IControlMode):
                     else:
                         self.can_controller.set_throttle(0)
                         self.can_controller.set_break(100)
-                elif car_in_range:
+                elif car_in_range and self.vehicle_handler.overtake_completed is False:
                     logging.info("Saw car, initializing overtake")
                     self.vehicle_handler.manual_main(front_view)
-                    if self.vehicle_handler.overtake_completed():
+                    if self.vehicle_handler.overtake_completed:
                         logging.info("Overtake completed, returning to original mode")
-                        if self.car_type == CarType.hunter:
-                            normalized_steering = -normalize_steering(steering_angle, 576)
-                            self.can_controller.set_steering_and_throttle(normalized_steering, 320)
-                            self.can_controller.set_parking_mode(0)
-                        else:
-                            self.can_controller.set_break(0)
-                            self.can_controller.set_kart_gearbox(KartGearBox.forward)
-                            self.can_controller.set_throttle(30)
-                            normalized_steering = normalize_steering(steering_angle, 1.25)
-                            self.can_controller.set_steering(normalized_steering)
-                elif pedestrian_in_range:
+                elif pedestrian_in_range and self.pedestrian_handler.pedestrian_crossed() is False:
                     logging.info("Saw person, stopping car")
                     self.pedestrian_handler.main(front_view)
-                    if self.pedestrian_handler.pedestrian_crossed():
-                        logging.info("Pedestrian crossed, continue driving")
-                        #self.pedestrian_handler.continue_driving()
-                        if self.car_type == CarType.hunter:
-                            normalized_steering = -normalize_steering(steering_angle, 576)
-                            self.can_controller.set_steering_and_throttle(normalized_steering, 320)
-                            self.can_controller.set_parking_mode(0)
-                        else:
-                            self.can_controller.set_break(0)
-                            self.can_controller.set_kart_gearbox(KartGearBox.forward)
-                            self.can_controller.set_throttle(30)
-                            normalized_steering = normalize_steering(steering_angle, 1.25)
-                            self.can_controller.set_steering(normalized_steering)
                 else:
                     logging.info(f"Speed: {speed}, Steering: {steering_angle}")
                     #logging.info(f"X: {self.location.x} Y: {self.location.y} THETA: {self.location.theta}")
                     #self.data_logger_manager.add_location_data(self.location.x, self.location.y, self.location.theta)
-
+                    # driving state
                     if self.car_type == CarType.hunter:
                         normalized_steering = -normalize_steering(steering_angle, 576)
                         self.can_controller.set_steering_and_throttle(normalized_steering, 320)

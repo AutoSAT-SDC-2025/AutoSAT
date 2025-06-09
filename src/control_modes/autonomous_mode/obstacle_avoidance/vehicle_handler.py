@@ -104,7 +104,7 @@ class VehicleHandler:
             return x_vals, y_vals
 
     def set_goal(self, det, x, y, theta):
-        if det["class"] == "car" and self.goal_set is False:
+        if det["class"] == "Car" and self.goal_set is False:
             distance_offset = 12.0
             x_goal = x
             y_goal = det["distance"] + distance_offset + y
@@ -112,7 +112,7 @@ class VehicleHandler:
             goal = (x_goal, y_goal, theta)
             print(f"Goal set to: {goal} at distance {det['distance']:.2f}m")
             return goal
-        elif det["class"] == "car" and self.goal_set is True:
+        elif det["class"] == "Car" and self.goal_set is True:
             print("Goal is already set.")
         else:
             print("No suitable car detected to set goal.")
@@ -121,7 +121,7 @@ class VehicleHandler:
     def set_obstacles(self, detections, x, y):
         obstacles = []
         for det in detections:
-            if det["class"] == "car":
+            if det["class"] == "Car":
                 obstacles.append((-1.25 + x, det["distance"] + y, 2.5, 4))
         return obstacles
 
@@ -253,7 +253,7 @@ class VehicleHandler:
         lane_center_offset = (x_center - (CameraResolution.WIDTH / 2)) / CameraResolution.WIDTH * scaling_factor
 
         try:
-            scan = next(self.iter_scans())
+            scan = self.iter_scans()
             closest_distance = self.determine_closest(scan)
             self.check_collision(closest_distance)
         except StopIteration:
@@ -342,32 +342,48 @@ class VehicleHandler:
                 self.can_controller.set_throttle(50)
             return self.centered
 
-    """def scan_left(self):
+    def get_scan(self):
+        scan_data = []
+        for new_scan, _, angle, distance in self.lidar.iter_measures():
+            if new_scan and len(scan_data) > 5:
+                return scan_data
+            scan_data.append((angle, distance))
+
+    def scan_right(self):
         for scan in self.iter_scans():
             obstacle_found = False
             for angle, distance in scan:
                 if angle == 270 and distance < 4000:
                     obstacle_found = True
-                    print("Obstacle detected on the left. Continuing scan...")
+                    print("Obstacle detected on the right. Continuing scan...")
                     break
 
             if not obstacle_found:
-                print("No obstacle on the left. Stopping scan.")
+                print("No obstacle on the right. Stopping scan.")
                 self.car_passed = True
                 break
 
-            time.sleep(0.1)"""
+            time.sleep(0.1)
 
     def manual_main(self, front_view=None):
         traffic_state, detections, draw_instructions = self.object_detection.process(front_view)
         print(f"Detections type: {type(detections)}")
         print(f"Detections content: {detections}")
+        try:
+            scan = self.get_scan()
+            closest_distance = self.determine_closest(scan)
+            if self.check_collision(closest_distance):
+                print("Emergency stop triggered due to imminent collision.")
+                return  # Exit the manual_main loop early to prevent further actions
+        except StopIteration:
+            print("No LIDAR data available.")
+
 
         current_time = time.time()
 
         if not self.steering_state:
-            centered = self.steer_to_centre(detections)
-            if centered is True:
+            self.centered = self.steer_to_centre(detections)
+            if self.centered is True:
                 if not hasattr(self, 'center_start_timer'):
                     self.center_start_timer = current_time
                 elif (current_time - self.center_start_timer) >= 0.5:
@@ -403,7 +419,7 @@ class VehicleHandler:
             if self.car_type == 'Hunter':
                 self.can_controller.set_steering_and_throttle(0, 300)
             else:
-                self.can_controller.set_steering_and_throttle(KartGearBox.forward)
+                self.can_controller.set_kart_gearbox(KartGearBox.forward)
                 self.can_controller.set_throttle(100)
                 self.can_controller.set_steering(0)
             self.steering_state = 'Switched'
@@ -415,7 +431,7 @@ class VehicleHandler:
 
             if (current_time - self.start_timer) >= 3 and not self.scan_started:
                 self.scan_started = True
-                self.car_passed = True
+                self.scan_right()
             if self.car_passed is True:
                 print("Car passed. Continuing steering sequence.")
                 if self.car_type == 'Hunter':
@@ -424,22 +440,22 @@ class VehicleHandler:
                     self.can_controller.set_kart_gearbox(KartGearBox.forward)
                     self.can_controller.set_throttle(50)
                     self.can_controller.set_steering(1.25)
-                self.steering_state = 'Right'
+                self.steering_state = 'RightReturn'
                 self.start_timer = time.time()
             else:
                 print("Waiting for car to pass...")
 
-        elif self.steering_state == 'Right' and self.car_passed is True and (current_time - self.start_timer) >= 1:
+        elif self.steering_state == 'RightReturn' and self.car_passed is True and (current_time - self.start_timer) >= 1:
             if self.car_type == 'Hunter':
                 self.can_controller.set_steering_and_throttle(-100, 300)
             else:
                 self.can_controller.set_kart_gearbox(KartGearBox.forward)
                 self.can_controller.set_throttle(50)
                 self.can_controller.set_steering(-1.25)
-            self.steering_state = 'Left'
+            self.steering_state = 'LeftReturn'
             self.start_timer = time.time()
 
-        elif self.steering_state == 'Left' and self.car_passed is True and (current_time - self.start_timer) >= 1:
+        elif self.steering_state == 'LeftReturn' and self.car_passed is True and (current_time - self.start_timer) >= 1:
             if self.car_type == 'Hunter':
                 self.can_controller.set_steering_and_throttle(0, 300)
             else:

@@ -13,19 +13,18 @@ class PedestrianHandler:
         self.initial_position = None
         self.current_position = None
         self.direction = None
-
-    def detect_objects(self, front_view = None):
-        if front_view is not None:
-            return self.object_detection.detect_objects(front_view)
-        return
+        self.car_stopped = False
+        self.initial_position_set = False
 
     def get_initial_position(self, detections):
         for det in detections:
             if det["class"] == "person":
                 x1, _, x2, _ = det["bbox"]
                 if (x1 + x2) / 2 < CameraResolution.WIDTH / 2:
+                    print("Initial position of pedestrian is on the left side of the camera")
                     self.initial_position = "Left"
                 else:
+                    print("Initial position of pedestrian is on the right side of the camera")
                     self.initial_position = "Right"
 
     def get_direction(self, detections):
@@ -38,10 +37,10 @@ class PedestrianHandler:
                 if obj_id in self.previous_detection:
                     prev_x_center = self.previous_detection[obj_id]["x_center"]
 
-                    if x_center > prev_x_center + 2:
+                    if x_center > prev_x_center + 5:
                         print("Pedestrian is going right")
                         self.direction = "Right"
-                    elif x_center < prev_x_center - 2:
+                    elif x_center < prev_x_center - 5:
                         print("Pedestrian is going left")
                         self.direction = "Left"
                     else:
@@ -60,8 +59,10 @@ class PedestrianHandler:
                 x_center = (det["bbox"][0] + det["bbox"][2]) / 2
                 print(x_center)
                 if x_center < CameraResolution.WIDTH / 2:
+                    print("Pedestrian is on the left side of the camera")
                     self.current_position = "Left"
                 elif x_center > CameraResolution.WIDTH / 2:
+                    print("Pedestrian is on the right side of the camera")
                     self.current_position = "Right"
                 else:
                     self.current_position = "Unknown"
@@ -69,60 +70,41 @@ class PedestrianHandler:
 
     def pedestrian_crossed(self):
         if self.current_position == "Left" and self.initial_position == "Right" and self.direction == "Stationary":
+            print("Pedestrian has crossed the road")
             return True
         elif self.current_position == "Right" and self.initial_position == "Left" and self.direction == "Stationary":
+            print("Pedestrian has crossed the road")
             return True
         return False
 
-    def stop_car(self, object_detections):
-        for obj in object_detections:
-            if obj["class"] == "person" and 0 < obj["distance"] < self.person_distance_threshold:
-                if self.car_type == 'Hunter':
-                    self.can_controller.set_steering_and_throttle(0, 0)
-                    self.can_controller.set_parking_mode(1)
-                else:
-                    self.can_controller.set_break(100)
-                print("Stopped for pedestrian")
-                return True
-        """if self.car_type == 'Hunter':
-            self.can_controller.set_parking_mode(0)
-            self.can_controller.set_steering_and_throttle(0, 300)
+    def stop_car(self, detections):
+        if self.car_stopped:
+            return
+        
+        if self.car_type == 'Hunter':
+            self.can_controller.set_steering_and_throttle(0, 0)
+            self.can_controller.set_parking_mode(1)
         else:
-            self.can_controller.set_kart_gearbox(KartGearBox.forward)
-            self.can_controller.set_throttle(100)
-            self.can_controller.set_steering(0)
-        return "Continuing to drive"""
+            self.can_controller.set_break(100)
+            self.can_controller.set_throttle(0)
 
-    """def continue_driving(self):
-        if self.pedestrian_crossed():
-            print("Continuing driving")
-            if self.car_type == 'Hunter':
-                self.can_controller.set_parking_mode(0)
-                self.can_controller.set_steering_and_throttle(0, 300)
-            else:
-                self.can_controller.set_kart_gearbox(KartGearBox.forward)
-                self.can_controller.set_throttle(100)
-                self.can_controller.set_steering(0)"""
+        self.car_stopped = True
+        print("Stopped for pedestrian")
+        return True
 
     def main(self, front_view = None):
-        initial_position_set = False
-
-        while True:
-            detections = self.object_detection.detect_objects(front_view)
-            if not detections:
-                continue
-
-            if not initial_position_set:
-                self.get_initial_position(detections)
-                initial_position_set = True
-
-            self.get_direction(detections)
-            self.get_current_pos(detections)
-
-            status = self.stop_car(detections)
-            print(status)
-            if self.pedestrian_crossed():
-                return
+        detections = self.object_detection.detect_objects(front_view)
+        if not self.initial_position_set:
+            self.get_initial_position(detections)
+            self.initial_position_set = True
+        self.stop_car(detections)
+        self.get_direction(detections)
+        self.get_current_pos(detections)
+        if self.pedestrian_crossed():
+            self.car_stopped = False
+            self.initial_position_set = False
+            return True
+        return False
 
 if __name__ == "__main__":
     weights_path = "assets/v5_model.pt"
