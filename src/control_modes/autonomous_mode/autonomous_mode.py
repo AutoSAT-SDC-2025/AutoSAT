@@ -98,12 +98,12 @@ class AutonomousMode(IControlMode):
                 for det in detections:
                     distance = det.get("distance", float('inf'))
                     obj_class = det.get("class", "")
-                    """if obj_class == "Car" and distance <= 10:
+                    if obj_class == "Car" and distance <= 10:
                         car_in_range = True
                         self.saw_car = True
                     elif obj_class == "Person" and distance <= 2:
                         pedestrian_in_range = True
-                        self.saw_pedestrian = True"""
+                        self.saw_pedestrian = True
                     if saw_red_light and distance <= 2:
                         red_light_in_range = True
 
@@ -118,13 +118,13 @@ class AutonomousMode(IControlMode):
                         self.can_controller.set_throttle(0)
                         self.can_controller.set_break(100)
                 elif car_in_range and self.vehicle_handler.overtake_completed is False:
-                    """logging.info("Saw car, initializing overtake")
+                    logging.info("Saw car, initializing overtake")
                     self.vehicle_handler.manual_main(front_view)
                     if self.vehicle_handler.overtake_completed:
-                        logging.info("Overtake completed, returning to original mode")"""
+                        logging.info("Overtake completed, returning to original mode")
                 elif pedestrian_in_range and self.pedestrian_handler.pedestrian_crossed() is False:
-                    """logging.info("Saw person, stopping car")
-                    self.pedestrian_handler.main(front_view)"""
+                    logging.info("Saw person, stopping car")
+                    self.pedestrian_handler.main(front_view)
                 else:
                     logging.info(f"Speed: {speed}, Steering: {steering_angle}")
                     #logging.info(f"X: {self.location.x} Y: {self.location.y} THETA: {self.location.theta}")
