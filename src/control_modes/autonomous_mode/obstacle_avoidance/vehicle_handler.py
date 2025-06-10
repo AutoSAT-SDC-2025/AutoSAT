@@ -308,8 +308,8 @@ class VehicleHandler:
                     self.can_controller.set_steering(0)
                     self.can_controller.set_throttle(50)
 
-    def steer_to_centre(self, detections=None):
-        if not detections:
+    def steer_to_centre(self, detections=None, front_view = None):
+        if not detections or front_view is None:
             print("No detections available for steering.")
             return False
 
@@ -395,11 +395,10 @@ class VehicleHandler:
         except StopIteration:
             print("No LIDAR data available.")
 
-
         current_time = time.time()
 
         if not self.steering_state:
-            self.centered = self.steer_to_centre(detections)
+            self.centered = self.steer_to_centre(detections, front_view)
             if self.centered is True:
                 if not hasattr(self, 'center_start_timer'):
                     self.center_start_timer = current_time
