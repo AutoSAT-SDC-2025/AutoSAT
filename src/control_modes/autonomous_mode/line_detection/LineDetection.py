@@ -84,7 +84,7 @@ class LineFollowingNavigation:
         height, width = img_shape[:2]
         left_lines = []
         right_lines = []
-
+        center_x = width / 2
         for line in lines:
             x1, y1, x2, y2 = line[0]
 
@@ -111,7 +111,7 @@ class LineFollowingNavigation:
             elif center_x > width / 2 and angle < 0:  # Right side, negative slope
                 right_lines.append([x1, y1, x2, y2])
 
-        return left_lines, right_lines
+        return left_lines, right_lines, center_x
 
     def get_best_line(self, lines):
         """Get the longest/best line from a group."""
