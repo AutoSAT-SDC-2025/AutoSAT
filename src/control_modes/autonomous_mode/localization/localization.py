@@ -9,6 +9,7 @@ import multiprocessing as mp
 from .lane_detection import LaneDetector
 import configparser
 from pathlib import Path
+import time
 
 class Localizer:
     def __init__(self, **kwargs):
@@ -164,6 +165,7 @@ def localization_worker(shared):
             shared.x = localizer.x
             shared.y = localizer.y
             shared.theta = localizer.theta
+        time.sleep(0.01)
 
 
 if __name__ == "__main__":
