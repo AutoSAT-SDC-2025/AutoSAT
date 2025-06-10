@@ -313,34 +313,51 @@ class VehicleHandler:
             print("No detections available for steering.")
             return False
 
+        # Get lane information
+        _, lateral_distance, x_center = self.lane_navigator.process(front_view)
+        lane_width = 3  # meters
+        scaling_factor = lane_width / 2
+        lane_offset = (x_center - (CameraResolution.WIDTH / 2)) / CameraResolution.WIDTH * scaling_factor
+
+        # Get vehicle offset from detected object
+        vehicle_offset = 0
         for det in detections:
-            x1, y1, x2, y2 = det['bbox']
-            object_center_x = (x1 + x2) / 2
-            screen_center_x = CameraResolution.WIDTH / 2
-            offset = object_center_x - screen_center_x
+            if det['class'] == "Car":
+                x1, y1, x2, y2 = det['bbox']
+                object_center_x = (x1 + x2) / 2
+                screen_center_x = CameraResolution.WIDTH / 2
+                vehicle_offset = object_center_x - screen_center_x
 
-            Kp = 0.5
-            steering_angle = round(Kp * offset)
-            MAX_STEERING_ANGLE = 576  # Maximum steering angle in CAN units
-            steering_angle = max(round(min(steering_angle, MAX_STEERING_ANGLE), -MAX_STEERING_ANGLE))
+        # Combine both offsets with weights
+        lane_weight = 0.7  # Prioritize lane centering
+        vehicle_weight = 0.3  # Secondary priority to vehicle avoidance
+        combined_offset = (lane_weight * lane_offset + vehicle_weight * vehicle_offset)
 
-            DEADZONE = 10  # Pixels
-            if abs(steering_angle) < DEADZONE:
-                print("Vehicle centered. Stopping steering adjustments.")
-                steering_angle = 0
-                self.centered = True
-            else:
-                self.centered = False
-                if offset > 0:
-                    print(f"Steering right by {steering_angle} CAN units.")
-                else:
-                    print(f"Steering left by {steering_angle} CAN units.")
-            if self.car_type == 'Hunter':
-                self.can_controller.set_steering_and_throttle(steering_angle, 300)
-            else:
-                self.can_controller.set_steering(steering_angle)
-                self.can_controller.set_throttle(50)
-            return self.centered
+        # Calculate steering angle
+        Kp = 0.5
+        steering_angle = round(Kp * combined_offset)
+        MAX_STEERING_ANGLE = 576  # Maximum steering angle in CAN units
+        steering_angle = max(round(min(steering_angle, MAX_STEERING_ANGLE), -MAX_STEERING_ANGLE))
+
+        # Check if we're centered
+        DEADZONE = 10  # Pixels
+        if abs(steering_angle) < DEADZONE:
+            print("Vehicle centered in lane. Stopping steering adjustments.")
+            steering_angle = 0
+            self.centered = True
+        else:
+            self.centered = False
+            print(f"Steering {'right' if combined_offset > 0 else 'left'} by {steering_angle} CAN units.")
+            print(f"Lane offset: {lane_offset:.2f}m, Vehicle offset: {vehicle_offset:.2f}px")
+
+        # Apply steering
+        if self.car_type == 'Hunter':
+            self.can_controller.set_steering_and_throttle(steering_angle, 300)
+        else:
+            self.can_controller.set_steering(steering_angle)
+            self.can_controller.set_throttle(50)
+
+        return self.centered
 
     def get_scan(self):
         scan_data = []
