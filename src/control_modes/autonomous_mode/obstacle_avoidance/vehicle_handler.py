@@ -224,13 +224,13 @@ class VehicleHandler:
 
     def main(self, front_view=None):
 
-        frame, detections = self.object_detection.detect_objects(front_view)
+        _, detections, _ = self.object_detection.process(front_view)
 
         x = self.localizer.x
         y = self.localizer.y
         theta = self.localizer.theta
 
-        steering_angle, lateral_distance, x_center = self.lane_navigator.process(frame)
+        steering_angle, lateral_distance, x_center = self.lane_navigator.process(front_view)
         lane_width = 3
         scaling_factor = lane_width / 2
         lane_center_offset = (x_center - (CameraResolution.WIDTH / 2)) / CameraResolution.WIDTH * scaling_factor
@@ -291,16 +291,15 @@ class VehicleHandler:
                     self.can_controller.set_steering(0)
                     self.can_controller.set_throttle(50)
 
-    def steer_to_centre(self, detections=None, front_view=None):
-        if not detections or front_view is None:
+    def steer_to_centre(self, detections=None, center_x = None):
+        if not detections is not None:
             print("No detections available for steering.")
             return False
 
         # Get lane information
-        _, lateral_distance, x_center = self.lane_navigator.process(front_view)
         lane_width = 3  # meters
         scaling_factor = lane_width / 2
-        lane_offset = (x_center - (CameraResolution.WIDTH / 2)) / CameraResolution.WIDTH * scaling_factor
+        lane_offset = (center_x - (CameraResolution.WIDTH / 2)) / CameraResolution.WIDTH * scaling_factor
 
         # Get vehicle offset from detected object
         vehicle_offset = 0
@@ -319,11 +318,14 @@ class VehicleHandler:
         # Calculate steering angle
         Kp = 0.5
         steering_angle = round(Kp * combined_offset)
-        MAX_STEERING_ANGLE = 576  # Maximum steering angle in CAN units
-        steering_angle = max(round(min(steering_angle, MAX_STEERING_ANGLE), -MAX_STEERING_ANGLE))
-
+        if self.car_type == 'Hunter':
+            MAX_STEERING_ANGLE = 576  # Maximum steering angle in CAN units for Hunter
+            steering_angle = max(round(min(steering_angle, MAX_STEERING_ANGLE), -MAX_STEERING_ANGLE))
+        else:
+            MAX_STEERING_ANGLE = 1.25  # Maximum steering angle for Kart
+            steering_angle = max(min(steering_angle, MAX_STEERING_ANGLE), -MAX_STEERING_ANGLE)
         # Check if we're centered
-        DEADZONE = 10  # Pixels
+        DEADZONE = 0.1 if self.car_type != 'Hunter' else 10  # Adjust deadzone based on car type
         if abs(steering_angle) < DEADZONE:
             print("Vehicle centered in lane. Stopping steering adjustments.")
             steering_angle = 0
@@ -384,7 +386,7 @@ class VehicleHandler:
             time.sleep(0.1)
 
     def manual_main(self, front_view=None):
-        traffic_state, detections = self.object_detection.process(front_view)
+        _, detections, _ = self.object_detection.process(front_view)
         print(f"Detections type: {type(detections)}")
         print(f"Detections content: {detections}")
         try:
@@ -399,7 +401,8 @@ class VehicleHandler:
         current_time = time.time()
 
         if not self.steering_state:
-            self.centered = self.steer_to_centre(detections, front_view)
+            _, _, center_x = self.object_detection.process(front_view)
+            self.centered = self.steer_to_centre(detections, center_x)
             if self.centered is True:
                 if not hasattr(self, 'center_start_timer'):
                     self.center_start_timer = current_time
