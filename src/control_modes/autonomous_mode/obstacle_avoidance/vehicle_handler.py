@@ -12,8 +12,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import time
 
+
 class VehicleHandler:
-    def __init__(self, weights_path=None, input_source=None, localizer=None, can_controller=None, car_type = None):
+    def __init__(self, weights_path=None, input_source=None, localizer=None, can_controller=None, car_type=None):
         self.localizer = localizer
         self.can_controller = can_controller
         self.car_type = car_type
@@ -154,7 +155,7 @@ class VehicleHandler:
 
             return max(round(min(new_steering_angle, 576), -576))
 
-    def set_steering_angle(self, angle_difference, steering_angle = None):
+    def set_steering_angle(self, angle_difference, steering_angle=None):
         angle_in_degrees = math.degrees(angle_difference)
         new_steering_angle = self.adjust_steering(angle_in_degrees)
         print(f"Steering angle diff (deg): {angle_in_degrees:.2f}, Command: {new_steering_angle:.2f}")
@@ -193,24 +194,6 @@ class VehicleHandler:
         plt.legend()
         plt.grid(True)
         plt.show()
-
-    def iter_scans(self):
-        lidar_scan = []
-        try:
-            for new_scan, _, angle, distance in self.lidar.iter_measures():
-                if new_scan:
-                    if len(lidar_scan) > 5:
-                        yield lidar_scan
-                    lidar_scan = []
-
-                lidar_scan.append((angle, distance))
-
-        except KeyboardInterrupt:
-            print("Stopping Lidar")
-
-        finally:
-            self.lidar.stop()
-            self.lidar.disconnect()
 
     def determine_closest(self, scan):
         """Find and print the closest object distance from the scan data."""
@@ -308,7 +291,7 @@ class VehicleHandler:
                     self.can_controller.set_steering(0)
                     self.can_controller.set_throttle(50)
 
-    def steer_to_centre(self, detections=None, front_view = None):
+    def steer_to_centre(self, detections=None, front_view=None):
         if not detections or front_view is None:
             print("No detections available for steering.")
             return False
@@ -359,10 +342,28 @@ class VehicleHandler:
 
         return self.centered
 
+    def iter_scans(self):
+        lidar_scan = []
+        try:
+            for new_scan, _, angle, distance in self.lidar.iter_measures():
+                if new_scan:
+                    if len(lidar_scan) > 5:
+                        yield lidar_scan
+                    lidar_scan = []
+
+                lidar_scan.append((angle, distance))
+
+        except KeyboardInterrupt:
+            print("Stopping Lidar")
+
+        finally:
+            self.lidar.stop()
+            self.lidar.disconnect()
+
     def get_scan(self):
         scan_data = []
-        for new_scan, _, angle, distance in self.lidar.iter_measures():
-            if new_scan and len(scan_data) > 5:
+        for _, angle, distance in self.lidar.iter_measures():
+            if len(scan_data) > 5:
                 return scan_data
             scan_data.append((angle, distance))
 
@@ -383,7 +384,7 @@ class VehicleHandler:
             time.sleep(0.1)
 
     def manual_main(self, front_view=None):
-        traffic_state, detections, object_visuals = self.object_detection.process(front_view)
+        traffic_state, detections = self.object_detection.process(front_view)
         print(f"Detections type: {type(detections)}")
         print(f"Detections content: {detections}")
         try:
@@ -416,7 +417,7 @@ class VehicleHandler:
             else:
                 self.can_controller.set_kart_gearbox(KartGearBox.forward)
                 self.can_controller.set_throttle(50)
-                self.can_controller.set_steering(-1.25) # max steering is between -1.25 and 1.25
+                self.can_controller.set_steering(-1.25)  # max steering is between -1.25 and 1.25
             self.steering_state = 'Left'
             self.start_timer = current_time
 
@@ -461,7 +462,8 @@ class VehicleHandler:
             else:
                 print("Waiting for car to pass...")
 
-        elif self.steering_state == 'RightReturn' and self.car_passed is True and (current_time - self.start_timer) >= 1:
+        elif self.steering_state == 'RightReturn' and self.car_passed is True and (
+                current_time - self.start_timer) >= 1:
             if self.car_type == 'Hunter':
                 self.can_controller.set_steering_and_throttle(-100, 300)
             else:
