@@ -1,7 +1,10 @@
 import logging
+
+from src.control_modes.autonomous_mode.localization.lane_detection import LaneDetector
 #import multiprocessing as mp
 from .line_detection.LineDetection import LineFollowingNavigation
-#from .localization import localization
+from .localization import localization
+import cv2 as cv
 from .object_detection.ObjectDetection import ObjectDetection
 from ...camera.camera_controller import CameraController
 from ...car_variables import CarType, HunterControlMode, KartGearBox, LineDetectionDims
@@ -55,6 +58,10 @@ class AutonomousMode(IControlMode):
         self.location.img = None
         self.localization_process = mp.Process(target=localization.localization_worker, args=(self.location,))
         self.localization_process.start()"""
+        
+        # Localization
+        self.localizer = localization.Localizer()
+        self.lane_detector = LaneDetector()
 
         self.vehicle_handler = VehicleHandler(weights_path='assets/v5_model.pt', input_source='video', localizer=None, can_controller=self.can_controller, car_type = self.car_type)
         self.pedestrian_handler = PedestrianHandler(weights_path='assets/v5_model.pt', input_source='video', can_controller=self.can_controller, car_type = self.car_type)
@@ -77,6 +84,11 @@ class AutonomousMode(IControlMode):
             while True:
                 stitched = self.camera_controller.get_stitched_image()
                 front_view = self.camera_controller.get_front_view()
+                
+                # Localization
+                frame = cv.resize(front_view, (848, 480))
+                lane = self.lane_detector(frame)
+                self.localizer.update(front_view, lane)
 
                 #self.location.img = front_view
 
