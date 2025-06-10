@@ -292,7 +292,7 @@ class VehicleHandler:
                     self.can_controller.set_throttle(50)
 
     def steer_to_centre(self, detections=None, center_x = None):
-        if not detections is not None:
+        """if not detections is not None:
             print("No detections available for steering.")
             return False
 
@@ -340,8 +340,8 @@ class VehicleHandler:
             self.can_controller.set_steering_and_throttle(steering_angle, 300)
         else:
             self.can_controller.set_steering(steering_angle)
-            self.can_controller.set_throttle(50)
-
+            self.can_controller.set_throttle(50)"""
+        self.centered = True
         return self.centered
 
     def iter_scans(self):
@@ -401,8 +401,8 @@ class VehicleHandler:
         current_time = time.time()
 
         if not self.steering_state:
-            _, _, center_x = self.lane_navigator.get_center_x(front_view)
-            self.centered = self.steer_to_centre(detections, center_x)
+            #center_x = self.lane_navigator.get_center_x(front_view)
+            #self.centered = self.steer_to_centre(detections, center_x)
             if self.centered is True:
                 if not hasattr(self, 'center_start_timer'):
                     self.center_start_timer = current_time
