@@ -369,7 +369,7 @@ class VehicleHandler:
     def scan_right(self):
         for scan in self.iter_scans():
             obstacle_found = False
-            for angle, distance in scan:
+            for _, angle, distance in scan:
                 if angle == 270 and distance < 4000:
                     obstacle_found = True
                     print("Obstacle detected on the right. Continuing scan...")
@@ -383,7 +383,7 @@ class VehicleHandler:
             time.sleep(0.1)
 
     def manual_main(self, front_view=None):
-        traffic_state, detections, draw_instructions = self.object_detection.process(front_view)
+        traffic_state, detections, object_visuals = self.object_detection.process(front_view)
         print(f"Detections type: {type(detections)}")
         print(f"Detections content: {detections}")
         try:
