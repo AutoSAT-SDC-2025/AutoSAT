@@ -401,7 +401,7 @@ class VehicleHandler:
         current_time = time.time()
 
         if not self.steering_state:
-            _, _, center_x = self.object_detection.process(front_view)
+            _, _, center_x = self.lane_navigator.process(front_view)
             self.centered = self.steer_to_centre(detections, center_x)
             if self.centered is True:
                 if not hasattr(self, 'center_start_timer'):
