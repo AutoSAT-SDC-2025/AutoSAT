@@ -82,11 +82,11 @@ class AutonomousMode(IControlMode):
 
                 self.renderer.clear()
 
-                steering_angle, speed, line_visuals = self.nav.process(stitched)
-                self.renderer.add_drawings_linedetection(line_visuals)
+                steering_angle, speed, visuals = self.nav.process(stitched)
+                self.renderer.add_drawings_linedetection(visuals)
 
-                traffic_state, detections, object_visuals = self.object_detector.process(front_view)
-                self.renderer.add_drawings_objectdetection(object_visuals)
+                traffic_state, detections, draw_instructions = self.object_detector.process(front_view)
+                self.renderer.add_drawings_objectdetection(draw_instructions)
 
                 saw_red_light = traffic_state['red_light']
                 speed_limit = traffic_state['speed_limit']
