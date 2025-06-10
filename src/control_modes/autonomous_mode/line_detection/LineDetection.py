@@ -113,6 +113,12 @@ class LineFollowingNavigation:
 
         return left_lines, right_lines, center_x
 
+    def get_center_x(self, frame):
+        binary = self.detect_white_lines(frame)
+        lines = self.detect_lines(binary)
+        _, _, center_x = self.filter_lines(lines, frame.shape)
+        return center_x
+
     def get_best_line(self, lines):
         """Get the longest/best line from a group."""
         if not lines:
