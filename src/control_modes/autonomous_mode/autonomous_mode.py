@@ -149,8 +149,9 @@ class AutonomousMode(IControlMode):
                         self.can_controller.set_break(0)
                         self.can_controller.set_kart_gearbox(KartGearBox.forward)
                         self.can_controller.set_throttle(30)
-                        normalized_steering = normalize_steering(steering_angle, 1.25)
-                        self.can_controller.set_steering(normalized_steering)
+                        rad_steer = steering_angle * np.pi / 180
+                        rad_steer = max((min(rad_steer, -1.25)), 1.25)
+                        self.can_controller.set_steering(rad_steer)
         except Exception as e:
             logging.error(f"Error in autonomous mode: {e}")
         finally:
