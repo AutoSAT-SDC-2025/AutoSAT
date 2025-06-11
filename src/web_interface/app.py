@@ -234,12 +234,9 @@ class ControlManager:
 
         try:
             self.controller.stop()
-            self.camera_controller.disable_cameras()
             self.running = False
             self.controller = None
-            self.camera_controller = None
             logger.info("Controller stopped")
-            logger.info("CameraController stopped")
             return True
         except Exception as e:
             logger.error(f"Error stopping controller: {e}")
