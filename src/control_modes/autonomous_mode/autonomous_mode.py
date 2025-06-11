@@ -6,7 +6,7 @@ from .line_detection.LineDetection import LineFollowingNavigation
 from .localization import localization
 import cv2 as cv
 from .object_detection.ObjectDetection import ObjectDetection
-from ...camera.camera_controller import CameraController
+from ...camera.camera_controller import CameraController, return_lower_rez
 from ...car_variables import CarType, HunterControlMode, KartGearBox, LineDetectionDims
 from ...control_modes.IControlMode import IControlMode
 from ...control_modes.autonomous_mode.object_detection.TrafficDetection import TrafficManager
@@ -63,7 +63,7 @@ class AutonomousMode(IControlMode):
         self.localizer = localization.Localizer()
         self.lane_detector = LaneDetector()
 
-        self.vehicle_handler = VehicleHandler(weights_path='assets/v5_model.pt', input_source='video', localizer=None, can_controller=self.can_controller, car_type = self.car_type)
+        self.vehicle_handler = VehicleHandler(weights_path='assets/v5_model.pt', input_source='video', localizer=self.localizer, can_controller=self.can_controller, car_type = self.car_type)
         self.pedestrian_handler = PedestrianHandler(weights_path='assets/v5_model.pt', input_source='video', can_controller=self.can_controller, car_type = self.car_type)
         self.saw_car = False
         self.saw_pedestrian = False
@@ -86,8 +86,7 @@ class AutonomousMode(IControlMode):
                 front_view = self.camera_controller.get_front_view()
                 
                 # Localization
-                frame = cv.resize(front_view, (848, 480))
-                lane = self.lane_detector(frame)
+                lane = self.lane_detector(return_lower_rez(front_view))
                 self.localizer.update(front_view, lane)
 
                 #self.location.img = front_view
@@ -139,8 +138,8 @@ class AutonomousMode(IControlMode):
                     self.pedestrian_handler.main(front_view)
                 else:
                     logging.info(f"Speed: {speed}, Steering: {steering_angle}")
-                    #logging.info(f"X: {self.location.x} Y: {self.location.y} THETA: {self.location.theta}")
-                    #self.data_logger_manager.add_location_data(self.location.x, self.location.y, self.location.theta)
+                    logging.info(f"X: {self.localizer.x} Y: {self.localizer.y} THETA: {self.localizer.theta}")
+                    self.data_logger_manager.add_location_data(self.localizer.x, self.localizer.y, self.localizer.theta)
                     # driving state
                     if self.car_type == CarType.hunter:
                         normalized_steering = -normalize_steering(steering_angle, 576)
