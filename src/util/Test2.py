@@ -47,7 +47,7 @@ def main(weights_path: str, input_source: str, image_folder: str):
         renderer.add_drawings_objectdetection(object_visuals)
 
 
-       # iterate over detections
+
         for detection in detections:
 
             pass
