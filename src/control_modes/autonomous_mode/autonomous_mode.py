@@ -30,6 +30,7 @@ class AutonomousMode(IControlMode):
         if self.camera_controller is None:
             try:
                 self.camera_controller = CameraController()
+                self.camera_controller.set_car_type(car_type)
                 self.camera_controller.enable_cameras()
                 self.camera_controller.setup_cameras()
             except Exception as e:
