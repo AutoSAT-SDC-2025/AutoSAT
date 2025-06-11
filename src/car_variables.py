@@ -1,6 +1,6 @@
 from enum import IntEnum
 
-CAN_MESSAGE_SENDING_SPEED = 0.04
+CAN_MESSAGE_SENDING_SPEED = 0.08#0.04 or 0.06
 
 class HunterControlMode(IntEnum):
     idle_mode = 0
