@@ -291,7 +291,7 @@ class VehicleHandler:
                     self.can_controller.set_steering(0)
                     self.can_controller.set_throttle(50)
 
-    def steer_to_centre(self, detections=None, center_x = None):
+    def steer_to_centre(self, detections=None, center_x=None):
         """if not detections is not None:
             print("No detections available for steering.")
             return False
@@ -369,6 +369,19 @@ class VehicleHandler:
                 return scan_data
             scan_data.append((angle, distance))
 
+    def check_collision_during_overtake(self):
+        try:
+            scan = self.get_scan()
+            if scan:
+                closest_distance = self.determine_closest(scan)
+                if self.check_collision(closest_distance):
+                    print("Emergency stop - collision detected during overtake!")
+                    return True
+            return False
+        except Exception as e:
+            print(f"Error checking collisions: {e}")
+            return False
+
     def scan_right(self):
         for scan in self.iter_scans():
             obstacle_found = False
@@ -389,20 +402,12 @@ class VehicleHandler:
         _, detections, _ = self.object_detection.process(front_view)
         print(f"Detections type: {type(detections)}")
         print(f"Detections content: {detections}")
-        try:
-            scan = self.get_scan()
-            closest_distance = self.determine_closest(scan)
-            if self.check_collision(closest_distance):
-                print("Emergency stop triggered due to imminent collision.")
-                return  # Exit the manual_main loop early to prevent further actions
-        except StopIteration:
-            print("No LIDAR data available.")
 
         current_time = time.time()
 
         if not self.steering_state:
-            #center_x = self.lane_navigator.get_center_x(front_view)
-            #self.centered = self.steer_to_centre(detections, center_x)
+            # center_x = self.lane_navigator.get_center_x(front_view)
+            # self.centered = self.steer_to_centre(detections, center_x)
             if self.centered is True:
                 if not hasattr(self, 'center_start_timer'):
                     self.center_start_timer = current_time
@@ -421,70 +426,89 @@ class VehicleHandler:
                 self.can_controller.set_kart_gearbox(KartGearBox.forward)
                 self.can_controller.set_throttle(50)
                 self.can_controller.set_steering(-1.25)  # max steering is between -1.25 and 1.25
+            if self.check_collision_during_overtake():
+                self.steering_state = None
+                return
             self.steering_state = 'Left'
             self.start_timer = current_time
 
-        elif self.steering_state == 'Left' and (current_time - self.start_timer) >= 1:
-            # Steer to the right
-            if self.car_type == 'Hunter':
-                self.can_controller.set_steering_and_throttle(100, 300)
-            else:
-                self.can_controller.set_kart_gearbox(KartGearBox.forward)
-                self.can_controller.set_throttle(50)
-                self.can_controller.set_steering(1.25)
-            self.steering_state = 'Right'
-            self.start_timer = time.time()
-
-        elif self.steering_state == 'Right' and (current_time - self.start_timer) >= 1:
-            if self.car_type == 'Hunter':
-                self.can_controller.set_steering_and_throttle(0, 300)
-            else:
-                self.can_controller.set_kart_gearbox(KartGearBox.forward)
-                self.can_controller.set_throttle(100)
-                self.can_controller.set_steering(0)
-            self.steering_state = 'Switched'
-            self.start_timer = time.time()
-            self.scan_started = False
-
-        elif self.steering_state == 'Switched':
-            self.can_controller.set_steering_and_throttle(0, 300)
-
-            if (current_time - self.start_timer) >= 3 and not self.scan_started:
-                self.scan_started = True
-                self.scan_right()
-            if self.car_passed is True:
-                print("Car passed. Continuing steering sequence.")
+            if self.steering_state == 'Left' and (current_time - self.start_timer) >= 1:
+                # Steer to the right
                 if self.car_type == 'Hunter':
                     self.can_controller.set_steering_and_throttle(100, 300)
                 else:
                     self.can_controller.set_kart_gearbox(KartGearBox.forward)
                     self.can_controller.set_throttle(50)
                     self.can_controller.set_steering(1.25)
-                self.steering_state = 'RightReturn'
+                if self.check_collision_during_overtake():
+                    self.steering_state = None
+                    return
+                self.steering_state = 'Right'
                 self.start_timer = time.time()
-            else:
-                print("Waiting for car to pass...")
 
-        elif self.steering_state == 'RightReturn' and self.car_passed is True and (
-                current_time - self.start_timer) >= 1:
-            if self.car_type == 'Hunter':
-                self.can_controller.set_steering_and_throttle(-100, 300)
-            else:
-                self.can_controller.set_kart_gearbox(KartGearBox.forward)
-                self.can_controller.set_throttle(50)
-                self.can_controller.set_steering(-1.25)
-            self.steering_state = 'LeftReturn'
-            self.start_timer = time.time()
+            elif self.steering_state == 'Right' and (current_time - self.start_timer) >= 1:
+                if self.car_type == 'Hunter':
+                    self.can_controller.set_steering_and_throttle(0, 300)
+                else:
+                    self.can_controller.set_kart_gearbox(KartGearBox.forward)
+                    self.can_controller.set_throttle(100)
+                    self.can_controller.set_steering(0)
+                if self.check_collision_during_overtake():
+                    self.steering_state = None
+                    return
+                self.steering_state = 'Switched'
+                self.start_timer = time.time()
+                self.scan_started = False
 
-        elif self.steering_state == 'LeftReturn' and self.car_passed is True and (current_time - self.start_timer) >= 1:
-            if self.car_type == 'Hunter':
+            elif self.steering_state == 'Switched':
                 self.can_controller.set_steering_and_throttle(0, 300)
-            else:
-                self.can_controller.set_kart_gearbox(KartGearBox.forward)
-                self.can_controller.set_throttle(100)
-                self.can_controller.set_steering(0)
-            self.steering_state = 'Done'
-            self.overtake_completed = True
+
+                if (current_time - self.start_timer) >= 3 and not self.scan_started:
+                    self.scan_started = True
+                    self.scan_right()
+                if self.car_passed is True:
+                    print("Car passed. Continuing steering sequence.")
+                    if self.car_type == 'Hunter':
+                        self.can_controller.set_steering_and_throttle(100, 300)
+                    else:
+                        self.can_controller.set_kart_gearbox(KartGearBox.forward)
+                        self.can_controller.set_throttle(50)
+                        self.can_controller.set_steering(1.25)
+                    if self.check_collision_during_overtake():
+                        self.steering_state = None
+                        return
+                    self.steering_state = 'RightReturn'
+                    self.start_timer = time.time()
+                else:
+                    print("Waiting for car to pass...")
+
+            elif self.steering_state == 'RightReturn' and self.car_passed is True and (
+                    current_time - self.start_timer) >= 1:
+                if self.car_type == 'Hunter':
+                    self.can_controller.set_steering_and_throttle(-100, 300)
+                else:
+                    self.can_controller.set_kart_gearbox(KartGearBox.forward)
+                    self.can_controller.set_throttle(50)
+                    self.can_controller.set_steering(-1.25)
+                if self.check_collision_during_overtake():
+                    self.steering_state = None
+                    return
+                self.steering_state = 'LeftReturn'
+                self.start_timer = time.time()
+
+            elif self.steering_state == 'LeftReturn' and self.car_passed is True and (
+                    current_time - self.start_timer) >= 1:
+                if self.car_type == 'Hunter':
+                    self.can_controller.set_steering_and_throttle(0, 300)
+                else:
+                    self.can_controller.set_kart_gearbox(KartGearBox.forward)
+                    self.can_controller.set_throttle(100)
+                    self.can_controller.set_steering(0)
+                if self.check_collision_during_overtake():
+                    self.steering_state = None
+                    return
+                self.steering_state = 'Done'
+                self.overtake_completed = True
 
 
 if __name__ == '__main__':
