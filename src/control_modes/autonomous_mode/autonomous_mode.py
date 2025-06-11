@@ -109,7 +109,10 @@ class AutonomousMode(IControlMode):
                 for det in detections:
                     distance = det.get("distance", float('inf'))
                     obj_class = det.get("class", "")
-                    if obj_class == "Car" and distance <= 10:
+                    x1, y1, x2, y2 = det['bbox']
+                    bbox_width = x2 - x1
+                    bbox_height = y2 - y1
+                    if obj_class == "Car" and distance <= 10 and bbox_width > 80 and bbox_height > 70:
                         car_in_range = True
                         self.saw_car = True
                     elif obj_class == "Person" and distance <= 2:
@@ -159,10 +162,6 @@ class AutonomousMode(IControlMode):
 
     def stop(self) -> None:
         logging.info("Stopping autonomous mode.")
-        self.camera_controller.disable_cameras()
-        self.camera_controller = None
-        #self.localization_process.terminate()
-        #self.localization_process.join()
         if self.car_type == CarType.hunter:
             self.can_controller.set_control_mode(HunterControlMode.idle_mode)
         else:

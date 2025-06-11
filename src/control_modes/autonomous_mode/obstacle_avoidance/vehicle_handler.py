@@ -3,7 +3,7 @@ from src.util.video import get_camera_config
 from ..localization.localization import Localizer
 from ..object_detection.Detection import ObjectDetection
 from ..line_detection.LineDetection import LineFollowingNavigation
-from ....car_variables import CameraResolution, KartGearBox
+from ....car_variables import KartGearBox
 from rplidar import RPLidar
 from math import floor
 # import cv2
@@ -48,19 +48,24 @@ class VehicleHandler:
         return False
 
     def set_waypoints(self, x, y):
-        waypoints = [[-0.25 + x, 0.75 + y], [-0.5 + x, 1 + y], [-0.75 + x, 1.25 + y], [-1 + x, 1.5 + y],
-                     [-1.5 + x, 1.75 + y], [-2 + x, 2 + y], [-2.25 + x, 2.5 + y], [-2.5 + x, 3 + y], [-2.5 + x, 14 + y],
-                     [-2.25 + x, 15 + y], [-2 + x, 16 + y], [-1.5 + x, 16.5 + y], [-1 + x, 17 + y],
-                     [-0.75 + x, 17.5 + y], [-0.5 + x, 18 + y]]
+        waypoints = [[-0.25 + x, 0.75 + y], [-0.5 + x, 1 + y],
+                     [-0.75 + x, 1.25 + y], [-1 + x, 1.5 + y],
+                     [-1.5 + x, 1.75 + y], [-2 + x, 2 + y],
+                     [-2.25 + x, 2.5 + y], [-2.5 + x, 3 + y],
+                     [-2.5 + x, 14 + y], [-2.25 + x, 15 + y],
+                     [-2 + x, 16 + y], [-1.5 + x, 16.5 + y],
+                     [-1 + x, 17 + y], [-0.75 + x, 17.5 + y],
+                     [-0.5 + x, 18 + y]]
         return waypoints
 
     def set_rrt(self, goal, detections, waypoints):
         if not self.path_found:
-            start = [self.localizer.x, self.localizer.y]
+            x = self.localizer.x / 1000
+            y = self.localizer.y / 1000
+
+            start = [x, y]
             map_size = [20, 20]
 
-            x = self.localizer.x
-            y = self.localizer.y
             obstacles = self.set_obstacles(detections, x, y)
 
             path = []
@@ -165,8 +170,8 @@ class VehicleHandler:
             self.can_controller.set_steering(steering_angle)
 
     def steer_toward_waypoint(self, waypoint):
-        current_x = self.localizer.x
-        current_y = self.localizer.y
+        current_x = self.localizer.x / 1000
+        current_y = self.localizer.y / 1000
         current_theta = self.localizer.theta
 
         desired_theta = self.calculate_angle(current_x, current_y, waypoint)
@@ -174,8 +179,8 @@ class VehicleHandler:
         self.set_steering_angle(angle_diff)
 
     def plot_waypoints(self, goal, detections, x_vals, y_vals):
-        x = self.localizer.x
-        y = self.localizer.y
+        x = self.localizer.x / 1000
+        y = self.localizer.y / 1000
         obstacles = self.set_obstacles(detections, x, y)
         plt.figure(figsize=(8, 8))
         plt.plot(x_vals, y_vals, marker='o', color='blue', label='RRT* Path')
@@ -226,8 +231,8 @@ class VehicleHandler:
 
         _, detections, _ = self.object_detection.process(front_view)
 
-        x = self.localizer.x
-        y = self.localizer.y
+        x = self.localizer.x / 1000
+        y = self.localizer.y / 1000
         theta = self.localizer.theta
 
         for det in detections:
