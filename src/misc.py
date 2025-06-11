@@ -1,5 +1,5 @@
 import logging
-from src.car_variables import CarType, HunterFeedbackCanIDs, KartFeedbackCanIDs
+from src.car_variables import CarType, HunterFeedbackCanIDs, KartFeedbackCanIDs, HunterControlCanIDs, KartControlCanIDs
 from src.gamepad import Gamepad
 from src.gamepad.controller_mapping import ControllerMapping
 from src.can_interface.can_decoder import print_can_messages, broadcast_can_message
@@ -34,9 +34,17 @@ def setup_listeners(can_controller, car_type):
         for feedback_id in HunterFeedbackCanIDs:
             can_controller.add_listener(feedback_id, print_can_messages)
             can_controller.add_listener(feedback_id, broadcast_can_message)
-            logging.debug(f"Listener added for Hunter message ID: {feedback_id}")
+            logging.debug(f"Listener added for Hunter feedback message ID: {feedback_id}")
+        for control_id in HunterControlCanIDs:
+            can_controller.add_listener(control_id, print_can_messages)
+            can_controller.add_listener(control_id, broadcast_can_message)
+            logging.debug(f"Listener added for Hunter control message ID: {control_id}")
     elif car_type == CarType.kart:
         for feedback_id in KartFeedbackCanIDs:
             can_controller.add_listener(feedback_id, print_can_messages)
             can_controller.add_listener(feedback_id, broadcast_can_message)
-            logging.debug(f"Listener added for Kart message ID: {feedback_id}")
+            logging.debug(f"Listener added for Kart feedback message ID: {feedback_id}")
+        for control_id in KartControlCanIDs:
+            can_controller.add_listener(control_id, print_can_messages)
+            can_controller.add_listener(control_id, broadcast_can_message)
+            logging.debug(f"Listener added for Hunter control message ID: {control_id}")
