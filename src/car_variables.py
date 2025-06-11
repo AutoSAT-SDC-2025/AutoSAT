@@ -44,8 +44,6 @@ class CameraResolution(IntEnum):
     HEIGHT = 480
     FOCAL_LENGTH = 540
 
-# class LineDetectionDims(IntEnum):
-#     WIDTH = 720
-#     HEIGHT = 720
-#     # WIDTH = 5530
-#     # HEIGHT = 684
+class LineDetectionDims(IntEnum):
+    WIDTH = 720
+    HEIGHT = 720
