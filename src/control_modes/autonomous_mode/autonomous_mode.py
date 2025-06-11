@@ -143,7 +143,7 @@ class AutonomousMode(IControlMode):
                     logging.info("Saw person, stopping car")
                     self.pedestrian_handler.main(front_view)
                     if self.pedestrian_handler.pedestrian_crossed():
-                        self.ignore_line_detection_until = time.time() + 5
+                        self.ignore_line_detection_until = time.time() + 7
                 else:
                     now = time.time()
                     if now < self.ignore_line_detection_until:
