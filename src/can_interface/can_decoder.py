@@ -10,8 +10,6 @@ from ..web_interface.websocket_manager import sync_broadcast_can_json
 
 @dataclass
 class CanMessageData:
-    type: str = "unknown"
-
     def to_dict(self) -> Dict[str, Any]:
         return {key: getattr(self, key) for key in self.__annotations__}
 
@@ -19,7 +17,6 @@ class CanMessageData:
 class HunterMovementData(CanMessageData):
     speed: float = 0.0
     steering: float = 0.0
-    type: str = field(default="hunter_movement")
 
     def __str__(self) -> str:
         return f"Speed: {self.speed:.2f} m/s | Steering: {self.steering:.2f} rad"
@@ -29,7 +26,6 @@ class HunterStatusData(CanMessageData):
     body_status: str = "Unknown"
     control_mode: str = "Unknown"
     brake_status: str = "Unknown"
-    type: str = field(default="hunter_status")
 
     def __str__(self) -> str:
         return f"Body: {self.body_status} | Control: {self.control_mode} | Brake: {self.brake_status}"
@@ -37,7 +33,6 @@ class HunterStatusData(CanMessageData):
 @dataclass
 class KartSteeringData(CanMessageData):
     steering_raw: int = 0
-    type: str = field(default="kart_steering")
 
     def __str__(self) -> str:
         return f"Steering: {self.steering_raw}"
@@ -49,7 +44,6 @@ class KartBreakingData(CanMessageData):
     direction: str = "Unknown"
     speed: int = 0
     error: str = "Unknown"
-    type: str = field(default="kart_breaking")
 
     def __str__(self) -> str:
         return f"Current: {self.current_pot} | Target: {self.target_pot} | Direction: {self.direction} | Speed: {self.speed} | Status: {self.error}"
@@ -60,7 +54,6 @@ class KartThrottleData(CanMessageData):
     braking: str = "Not Braking"
     gear: str = "N"
     state: str = "Active"
-    type: str = field(default="kart_throttle")
 
     def __str__(self) -> str:
         return f"Throttle: {self.throttle_voltage} | Braking: {self.braking} | Gear: {self.gear} | State: {self.state}"
@@ -69,7 +62,6 @@ class KartThrottleData(CanMessageData):
 class KartSpeedData(CanMessageData):
     speed: float = 0.0
     speed_hmh: int = 0
-    type: str = field(default="kart_speed")
 
     def __str__(self) -> str:
         return f"Speed: {self.speed:.2f} m/s"
@@ -78,7 +70,6 @@ class KartSpeedData(CanMessageData):
 class HunterMovementControlData(CanMessageData):
     speed: float = 0.0
     steering: float = 0.0
-    type: str = field(default="hunter_movement_control")
 
     def __str__(self) -> str:
         return f"Command Speed: {self.speed:.2f} m/s | Command Steering: {self.steering:.2f} rad"
@@ -86,7 +77,6 @@ class HunterMovementControlData(CanMessageData):
 @dataclass
 class HunterControlModeData(CanMessageData):
     mode: str = "Unknown"
-    type: str = field(default="hunter_control_mode")
 
     def __str__(self) -> str:
         return f"Command Mode: {self.mode}"
@@ -94,7 +84,6 @@ class HunterControlModeData(CanMessageData):
 @dataclass
 class HunterParkingControlData(CanMessageData):
     engaged: bool = False
-    type: str = field(default="hunter_parking_control")
 
     def __str__(self) -> str:
         return f"Parking: {'Engaged' if self.engaged else 'Disengaged'}"
@@ -102,7 +91,6 @@ class HunterParkingControlData(CanMessageData):
 @dataclass
 class KartSteeringControlData(CanMessageData):
     steering_angle: float = 0.0
-    type: str = field(default="kart_steering_control")
 
     def __str__(self) -> str:
         return f"Command Steering: {self.steering_angle:.2f}"
@@ -111,7 +99,6 @@ class KartSteeringControlData(CanMessageData):
 class KartThrottleControlData(CanMessageData):
     throttle: int = 0
     gear: str = "N"
-    type: str = field(default="kart_throttle_control")
 
     def __str__(self) -> str:
         return f"Command Throttle: {self.throttle} | Gear: {self.gear}"
@@ -119,7 +106,6 @@ class KartThrottleControlData(CanMessageData):
 @dataclass
 class KartBreakControlData(CanMessageData):
     brake_value: int = 0
-    type: str = field(default="kart_break_control")
 
     def __str__(self) -> str:
         return f"Command Brake: {self.brake_value}"
@@ -174,7 +160,7 @@ class CanDecoder:
 
     @staticmethod
     def decode_message(message: Message) -> DecodedMessage:
-        timestamp = datetime.fromtimestamp(message.timestamp).strftime('%H:%M:%S.%f')[:-3]
+        timestamp = datetime.fromtimestamp(message.timestamp).isoformat()
         message_id = message.arbitration_id
         hex_data = ' '.join([f"{b:02X}" for b in message.data])
 
@@ -332,7 +318,7 @@ class CanDecoder:
             data=data
         )
 
-def broadcast_can_message(message: Message) -> str:
+def broadcast_can_message(message: Message) -> None:
     decoded = CanDecoder.decode_message(message)
     sync_broadcast_can_json(decoded.to_json())
 
