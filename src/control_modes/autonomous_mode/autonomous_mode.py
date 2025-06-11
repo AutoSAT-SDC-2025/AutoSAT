@@ -1,6 +1,8 @@
 import logging
 import time
 
+import numpy as np
+
 from src.control_modes.autonomous_mode.localization.lane_detection import LaneDetector
 #import multiprocessing as mp
 from .line_detection.LineDetection import LineFollowingNavigation
