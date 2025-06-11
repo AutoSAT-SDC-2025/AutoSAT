@@ -230,44 +230,16 @@ class VehicleHandler:
         y = self.localizer.y
         theta = self.localizer.theta
 
-        steering_angle, lateral_distance, x_center = self.lane_navigator.process(front_view)
-        lane_width = 3
-        scaling_factor = lane_width / 2
-        lane_center_offset = (x_center - (CameraResolution.WIDTH / 2)) / CameraResolution.WIDTH * scaling_factor
-
-        try:
-            scan = self.iter_scans()
-            closest_distance = self.determine_closest(scan)
-            self.check_collision(closest_distance)
-        except StopIteration:
-            pass
-
         for det in detections:
-            """x1, y1, x2, y2 = det['bbox']
-            label = f"{det['class']} ({det['distance']:.2f}m)"
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(frame, label, (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)"""
-
             if det["class"] == "Car" and det["distance"] <= 10 and not self.goal_set:
                 self.goal = self.set_goal(det, x, y, theta)
                 self.goal_set = True
 
                 if self.goal:
-                    target_theta = 0
-                    correction_distance = 2.0
-
-                    x_corrected = x - lane_center_offset
-
-                    x_aligned = x_corrected + correction_distance * math.cos(target_theta)
-                    y_aligned = y + correction_distance * math.sin(target_theta)
-
-                    lane_center_wp = [x_aligned, y_aligned]
-                    waypoints = [lane_center_wp] + self.set_waypoints(x, y)
+                    waypoints =  self.set_waypoints(x, y)
                     result = self.set_rrt(self.goal, detections, waypoints)
                     if result:
                         self.x_vals, self.y_vals = result
-                        # self.plot_waypoints(self.goal, detections, self.x_vals, self.y_vals)
                         self.path_found = True
                         self.detections = detections
 
