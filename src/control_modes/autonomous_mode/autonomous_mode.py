@@ -1,10 +1,10 @@
 import logging
 
 from src.control_modes.autonomous_mode.localization.lane_detection import LaneDetector
-# import multiprocessing as mp
+#import multiprocessing as mp
 from .line_detection.LineDetection import LineFollowingNavigation
 from .localization import localization
-#import cv2 as cv
+import cv2 as cv
 from .object_detection.ObjectDetection import ObjectDetection
 from ...camera.camera_controller import CameraController, return_lower_rez
 from ...car_variables import CarType, HunterControlMode, KartGearBox, LineDetectionDims
@@ -15,8 +15,7 @@ from ...can_interface.can_factory import select_can_controller_creator, create_c
 from ...util.Render import Renderer
 from .obstacle_avoidance.vehicle_handler import VehicleHandler
 from .obstacle_avoidance.pedestrian_handler import PedestrianHandler
-
-# from ...misc import calculate_steering, calculate_throttle, controller_break_value, dead_man_switch, setup_listeners
+#from ...misc import calculate_steering, calculate_throttle, controller_break_value, dead_man_switch, setup_listeners
 
 def normalize_steering(angle_deg: float, max_output: float) -> float:
     # Clip the input angle to [-45, 45] for safety
@@ -24,13 +23,12 @@ def normalize_steering(angle_deg: float, max_output: float) -> float:
     return (angle_deg / 45.0) * max_output
 
 class AutonomousMode(IControlMode):
-    def __init__(self, car_type: CarType, use_checkpoint_mode=False, camera_controller=None, renderer=None,
-                 data_logger_manager=None):
+
+    def __init__(self, car_type: CarType, use_checkpoint_mode=False, camera_controller = None, renderer = None, data_logger_manager = None):
         self.camera_controller = camera_controller
         if self.camera_controller is None:
             try:
                 self.camera_controller = CameraController()
-                self.camera_controller.set_car_type(car_type)
                 self.camera_controller.enable_cameras()
                 self.camera_controller.setup_cameras()
             except Exception as e:
@@ -45,22 +43,28 @@ class AutonomousMode(IControlMode):
         self.car_seen_counter = 0
         self.car_on_left = False
 
-        self.nav = LineFollowingNavigation(width=LineDetectionDims.WIDTH, height=LineDetectionDims.HEIGHT,
-                                           mode="normal")  # 'normal', 'left_parallel', 'right_parallel'
+        self.nav = LineFollowingNavigation(width=LineDetectionDims.WIDTH, height=LineDetectionDims.HEIGHT,mode="normal") # 'normal', 'left_parallel', 'right_parallel'
         self.object_detector = ObjectDetection(weights_path='assets/v5_model.pt', input_source='video')
         self.traffic_manager = TrafficManager()
         self.renderer = renderer if renderer is not None else Renderer()
 
         self.data_logger_manager = data_logger_manager
+        """
+        localization_manager = mp.Manager()
+        self.location = localization_manager.Namespace()
+        self.location.x = 0
+        self.location.y = 0
+        self.location.theta = 0
+        self.location.img = None
+        self.localization_process = mp.Process(target=localization.localization_worker, args=(self.location,))
+        self.localization_process.start()"""
+        
         # Localization
         self.localizer = localization.Localizer()
         self.lane_detector = LaneDetector()
 
-        self.vehicle_handler = VehicleHandler(weights_path='assets/v5_model.pt', input_source='video',
-                                              localizer=self.localizer, can_controller=self.can_controller,
-                                              car_type=self.car_type)
-        self.pedestrian_handler = PedestrianHandler(weights_path='assets/v5_model.pt', input_source='video',
-                                                    can_controller=self.can_controller, car_type=self.car_type)
+        self.vehicle_handler = VehicleHandler(weights_path='assets/v5_model.pt', input_source='video', localizer=self.localizer, can_controller=self.can_controller, car_type = self.car_type)
+        self.pedestrian_handler = PedestrianHandler(weights_path='assets/v5_model.pt', input_source='video', can_controller=self.can_controller, car_type = self.car_type)
         self.saw_car = False
         self.saw_pedestrian = False
 
@@ -80,10 +84,12 @@ class AutonomousMode(IControlMode):
             while True:
                 stitched = self.camera_controller.get_stitched_image()
                 front_view = self.camera_controller.get_front_view()
-
+                
                 # Localization
                 lane = self.lane_detector(return_lower_rez(front_view))
                 self.localizer.update(front_view, lane)
+
+                #self.location.img = front_view
 
                 self.renderer.clear()
 
@@ -103,9 +109,7 @@ class AutonomousMode(IControlMode):
                 for det in detections:
                     distance = det.get("distance", float('inf'))
                     obj_class = det.get("class", "")
-                    x1, _, x2, _ = det['bbox']
-                    bbox_width = x2 - x1
-                    if obj_class == "Car" and distance <= 10 and bbox_width > 90:
+                    if obj_class == "Car" and distance <= 10:
                         car_in_range = True
                         self.saw_car = True
                     elif obj_class == "Person" and distance <= 2:
@@ -154,6 +158,10 @@ class AutonomousMode(IControlMode):
 
     def stop(self) -> None:
         logging.info("Stopping autonomous mode.")
+        self.camera_controller.disable_cameras()
+        self.camera_controller = None
+        #self.localization_process.terminate()
+        #self.localization_process.join()
         if self.car_type == CarType.hunter:
             self.can_controller.set_control_mode(HunterControlMode.idle_mode)
         else:

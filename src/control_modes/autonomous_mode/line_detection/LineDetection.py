@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from src.control_modes.autonomous_mode.line_detection.LineProcessor import clusterLines, combineLines, getLines
 
-enable_debug = False
+enable_debug = True
 
 
 class LineFollowingNavigation:
@@ -14,7 +14,10 @@ class LineFollowingNavigation:
         # Memory for line tracking
         self.prev_left_line = None
         self.prev_right_line = None
+        self.crosswalk_detected = False
+        self.crosswalk_confidence = 0
         self.frame_count = 0
+        print(f"Initialized with width={self.width}, height={self.height}, scale={self.scale}, mode='{self.mode}'")
 
     def set_mode(self, mode):
         """Set the driving mode."""
@@ -32,7 +35,7 @@ class LineFollowingNavigation:
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
 
         # High threshold for white lines only
-        _, binary = cv2.threshold(blurred, 180, 255, cv2.THRESH_BINARY)
+        _, binary = cv2.threshold(blurred, 170, 255, cv2.THRESH_BINARY)
 
         # Create ROI mask - focus on bottom half where road lines are
         height, width = img.shape[:2]
@@ -77,40 +80,79 @@ class LineFollowingNavigation:
         return lines
 
     def filter_lines(self, lines, img_shape):
-        """Filter lines by angle and position."""
+        """Filter lines by angle and position, excluding crosswalk lines."""
+        print(f"filter_lines getting lines?", lines is not None)
         if lines is None:
             return [], []
 
         height, width = img_shape[:2]
         left_lines = []
         right_lines = []
-        center_x = width / 2
+
+        # First, detect if there's a crosswalk
+        is_crosswalk, crosswalk_conf = self.detect_crosswalk(lines, img_shape)
+        self.crosswalk_detected = is_crosswalk
+        self.crosswalk_confidence = crosswalk_conf
+
+        if is_crosswalk:
+            print(f"Crosswalk detected with confidence {crosswalk_conf}% - filtering out vertical lines")
+
         for line in lines:
             x1, y1, x2, y2 = line[0]
 
             # Calculate line angle
-            if x2 - x1 == 0:  # Avoid division by zero
+            if x2 - x1 == 0:  # Vertical line
+                angle = 90.0
+            else:
+                angle = np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi
+
+            print(
+                f"filter_lines: Line detected with angle {angle:.2f} degrees, coordinates: ({x1}, {y1}) to ({x2}, {y2})")
+
+            # Enhanced filtering to exclude crosswalk lines
+            # Skip vertical lines (crosswalk stripes) - more aggressive filtering
+            if abs(angle) > 75:  # Skip lines that are too vertical (crosswalk stripes)
+                print(f"filter_lines: Skipping vertical line (potential crosswalk stripe) with angle {angle:.2f}")
                 continue
 
-            angle = np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi
-
-            # Filter by angle - lane lines should be roughly diagonal
-            if abs(angle) < 25 or abs(angle) > 75:
+            # Filter by angle - lane lines should be diagonal but not too steep
+            if abs(angle) < 15:  # Skip nearly horizontal lines
+                print(f"filter_lines: Skipping horizontal line with angle {angle:.2f}")
                 continue
 
             # Calculate line length
             length = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
             if length < 30:  # Skip very short lines
+                print(f"filter_lines: Skipping short line with length {length:.2f}")
                 continue
+
+            # If crosswalk detected, be more strict about line selection
+            if is_crosswalk:
+                # Only accept lines that are clearly diagonal (lane lines)
+                if abs(angle) < 25 or abs(angle) > 65:
+                    print(f"filter_lines: Crosswalk mode - skipping line with angle {angle:.2f}")
+                    continue
+
+                # Require longer lines when crosswalk is present
+                if length < 50:
+                    print(f"filter_lines: Crosswalk mode - skipping shorter line with length {length:.2f}")
+                    continue
 
             # Determine if line is on left or right side
             center_x = (x1 + x2) / 2
 
-            if center_x < width / 2 and angle > 0:  # Left side, positive slope
-                left_lines.append([x1, y1, x2, y2])
-            elif center_x > width / 2 and angle < 0:  # Right side, negative slope
-                right_lines.append([x1, y1, x2, y2])
+            print(f"The center X: {center_x:.2f}, width / 2: {width / 2:.2f}, angle: {angle:.2f} degrees")
+            print(
+                f"filter_lines: Line center at {center_x:.2f}, width center at {width / 2:.2f} - angle {angle:.2f} degrees")
 
+            if center_x < width / 2 and angle < 0:  # Left side, negative slope (line going up-left to down-right)
+                left_lines.append([x1, y1, x2, y2])
+            elif center_x > width / 2 and angle > 0:  # Right side, positive slope (line going up-right to down-left)
+                right_lines.append([x1, y1, x2, y2])
+            else:
+                print(f"filter_lines: Line at center {center_x:.2f} does not match left/right criteria, skipping.")
+
+        print(f"Returning {len(left_lines)} left lines and {len(right_lines)} right lines.")
         return left_lines, right_lines
 
     """def get_center_x(self, frame):
@@ -122,6 +164,7 @@ class LineFollowingNavigation:
     def get_best_line(self, lines):
         """Get the longest/best line from a group."""
         if not lines:
+            print("get_best_line: No lines provided.")
             return None
 
         best_line = None
@@ -135,6 +178,7 @@ class LineFollowingNavigation:
                 max_length = length
                 best_line = line
 
+        print(f"get_best_line: Found best line with length {max_length}: {best_line}")
         return best_line
 
     def extrapolate_line(self, line, img_height, horizon_y=200):
@@ -269,10 +313,12 @@ class LineFollowingNavigation:
 
         # Step 3: Detect clustered lines (purple lines)
         clustered_lines = self.detect_clustered_lines(raw_lines, img.shape)
+        print(clustered_lines)
 
         # Step 4: Filter and separate left/right lines
         left_lines, right_lines = self.filter_lines(raw_lines, img.shape)
 
+        print(f"Any filtered right lines: {len(right_lines) > 0}, left lines: {len(left_lines) > 0}")
         # Step 5: Get best lines
         best_left = self.get_best_line(left_lines)
         best_right = self.get_best_line(right_lines)
@@ -290,6 +336,8 @@ class LineFollowingNavigation:
                 for line in raw_lines:
                     x1, y1, x2, y2 = line[0]
                     cv2.line(line_img, (x1, y1), (x2, y2), (0, 255, 255), 1)  # Yellow
+                    # draw text saying each coord
+
 
             # Show clustered lines (purple)
             for line in clustered_lines:
@@ -326,13 +374,42 @@ class LineFollowingNavigation:
             visuals.extend(target_visuals)
             return target, visuals
 
+        print("No valid lines detected, cannot find target.")
         return None, visuals
 
     def findTarget(self, left_lines, right_lines, horizon_height, img, left_weight=1, right_weight=1, weight_factor=1,
                    bias=0, draw=1):
         visuals = []
+        print("Finding target...")
 
+        # If crosswalk is detected, prioritize going straight
+        if self.crosswalk_detected:
+            print(f"Crosswalk detected - maintaining straight course")
+            target = self.width / 2  # Go straight through crosswalk
+
+            visuals.append({
+                'type': 'text',
+                'text': f"CROSSWALK - GO STRAIGHT ({self.crosswalk_confidence}%)",
+                'position': (10, 60),
+                'font': 'FONT_HERSHEY_SIMPLEX',
+                'font_scale': 0.7,
+                'color': (0, 0, 255),
+                'thickness': 2
+            })
+
+            visuals.append({
+                'type': 'circle',
+                'center': (int(target), horizon_height),
+                'radius': 8,
+                'color': (0, 165, 255),  # Orange circle for crosswalk mode
+                'thickness': -1
+            })
+
+            return target, visuals
+
+        # Rest of the original findTarget method...
         if not left_lines and not right_lines:
+            print("No left || or right detected")
             return None, visuals
 
         elif not right_lines:
@@ -366,6 +443,7 @@ class LineFollowingNavigation:
             x1l, y1l, x2l, y2l = left_lines[0]
             x1r, y1r, x2r, y2r = right_lines[0]
 
+            print(f"Target: Left Line: ({x1l}, {y1l}) to ({x2l}, {y2l}), Right Line: ({x1r}, {y1r}) to ({x2r}, {y2r})")
             # Target is midpoint between the two lines at horizon
             target = (x1l + x1r) / 2
 
@@ -477,10 +555,12 @@ class LineFollowingNavigation:
                 offset = target - mid_point
                 steering_angle = (offset / (self.width / 2)) * max_angle
             else:
+                print("No lines detected and no target provided, defaulting to straight.")
                 return 0.0
 
         # Limit steering angle
         steering_angle = max(min(steering_angle, max_angle), -max_angle)
+        print(f"Steering angle calculated: {steering_angle:.2f} degrees")
         return steering_angle
 
     def calculateSpeed(self, steering_angle, base_speed=100):
@@ -498,6 +578,7 @@ class LineFollowingNavigation:
         # Get the detected lines for steering calculation
         binary = self.detect_white_lines(img)
         raw_lines = self.detect_lines(binary)
+
         left_lines, right_lines = self.filter_lines(raw_lines, img.shape)
 
         # Get best lines
@@ -567,8 +648,18 @@ class LineFollowingNavigation:
         steering_angle = self.calculateSteeringAngle(target, final_left, final_right)
         speed = self.calculateSpeed(steering_angle, base_speed)
 
+
+        # Prepare visuals for display
+        print("Final steering angle:", steering_angle)
+
+        _mode = self.mode if self.mode else 'normal'
+        _target = target if target is not None else 0.0
+        _steering_angle = steering_angle if steering_angle is not None else 0.0
+        _speed = speed if speed is not None else 0.0
+
+        text = (f"Mode: {_mode}, target: {_target:.2f}, "
+                f"steering angle: {_steering_angle:.2f}, speed: {_speed:.2f}")
         if target is not None:
-            text = f"Mode: {self.mode} | Steering: {steering_angle:.1f} | Speed: {speed:.1f}"
             visuals.append({
                 'type': 'text',
                 'text': text,
@@ -579,7 +670,6 @@ class LineFollowingNavigation:
                 'thickness': 2
             })
         else:
-            text = f"Mode: {self.mode} | No target detected"
             visuals.append({
                 'type': 'text',
                 'text': text,
@@ -591,6 +681,77 @@ class LineFollowingNavigation:
             })
 
         return steering_angle, speed, visuals
+
+    def detect_crosswalk(self, lines, img_shape):
+        """Detect crosswalk patterns and return confidence level."""
+        if lines is None:
+            return False, 0
+
+        height, width = img_shape[:2]
+        vertical_lines = []
+        crosswalk_confidence = 0
+
+        # Look for vertical or near-vertical lines
+        for line in lines:
+            x1, y1, x2, y2 = line[0]
+
+            # Calculate angle from horizontal
+            if x2 - x1 == 0:
+                angle = 90  # Perfectly vertical
+            else:
+                angle = abs(np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi)
+
+            # Check if line is vertical (80-90 degrees from horizontal)
+            if angle > 80:
+                line_length = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+                # Only consider lines that are reasonably long (potential crosswalk stripes)
+                if line_length > 30:
+                    vertical_lines.append({
+                        'line': [x1, y1, x2, y2],
+                        'length': line_length,
+                        'center_x': (x1 + x2) / 2,
+                        'center_y': (y1 + y2) / 2
+                    })
+
+        # Analyze vertical lines for crosswalk pattern
+        if len(vertical_lines) >= 2:  # Need at least 2 vertical lines
+            # Sort by x position
+            vertical_lines.sort(key=lambda x: x['center_x'])
+
+            # Check for evenly spaced vertical lines (crosswalk pattern)
+            spacings = []
+            for i in range(1, len(vertical_lines)):
+                spacing = vertical_lines[i]['center_x'] - vertical_lines[i - 1]['center_x']
+                spacings.append(spacing)
+
+            if len(spacings) >= 1:
+                # Check if spacings are relatively consistent (crosswalk stripes)
+                mean_spacing = np.mean(spacings)
+                spacing_variance = np.var(spacings) if len(spacings) > 1 else 0
+
+                # Crosswalk stripes are typically 30-150 pixels apart depending on distance
+                if 30 < mean_spacing < 150 and spacing_variance < 400:
+                    crosswalk_confidence = min(len(vertical_lines) * 20, 100)  # Max 100%
+
+                    # Additional checks for higher confidence
+                    if len(vertical_lines) >= 3:  # 3 or more stripes
+                        crosswalk_confidence += 20
+
+                    # Check if lines span significant portion of width
+                    total_width_coverage = max([l['center_x'] for l in vertical_lines]) - min(
+                        [l['center_x'] for l in vertical_lines])
+                    if total_width_coverage > width * 0.3:  # Covers at least 30% of width
+                        crosswalk_confidence += 15
+
+                    crosswalk_confidence = min(crosswalk_confidence, 100)
+
+        is_crosswalk = crosswalk_confidence > 40  # Threshold for crosswalk detection
+
+        if enable_debug and is_crosswalk:
+            print(f"CROSSWALK DETECTED! Confidence: {crosswalk_confidence}%, Vertical lines: {len(vertical_lines)}")
+
+        return is_crosswalk, crosswalk_confidence
+
 
     def process(self, frame, base_speed=100, draw=1):
         """Process a single frame and return the results."""

@@ -99,7 +99,7 @@ if __name__ == '__main__':
 
     # FIX: Only go up 2 levels to get to AutoSAT root
     project_root = os.path.abspath(os.path.join(script_dir, '..', '..'))
-    image_folder = os.path.join('logs/session_2025-05-22_15-19-22_266/images/stitched')
+    image_folder = os.path.join('assets/data/', inp)
     weights_path = os.path.join(project_root, 'assets', 'v5_model.pt')
 
     print("Image folder:", image_folder)
