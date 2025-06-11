@@ -339,7 +339,7 @@ class LineFollowingNavigation:
         intercepts_left = self.find_point_of_interception(left_lines)
         intercepts_right = self.find_point_of_interception(right_lines)
 
-        left_lines = self.get_lines_in_window(intercepts_left, left_lines, 0, 250)
+        left_lines = self.get_lines_in_window(intercepts_left, left_lines, 0, 350)
         right_lines = self.get_lines_in_window(intercepts_right, right_lines, self.width - 300, self.width)
 
         best_left = self.get_best_line(left_lines)
