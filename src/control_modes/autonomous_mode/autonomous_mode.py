@@ -49,16 +49,6 @@ class AutonomousMode(IControlMode):
         self.renderer = renderer if renderer is not None else Renderer()
 
         self.data_logger_manager = data_logger_manager
-        """
-        localization_manager = mp.Manager()
-        self.location = localization_manager.Namespace()
-        self.location.x = 0
-        self.location.y = 0
-        self.location.theta = 0
-        self.location.img = None
-        self.localization_process = mp.Process(target=localization.localization_worker, args=(self.location,))
-        self.localization_process.start()"""
-        
         # Localization
         self.localizer = localization.Localizer()
         self.lane_detector = LaneDetector()
@@ -88,8 +78,6 @@ class AutonomousMode(IControlMode):
                 # Localization
                 lane = self.lane_detector(return_lower_rez(front_view))
                 self.localizer.update(front_view, lane)
-
-                #self.location.img = front_view
 
                 self.renderer.clear()
 
