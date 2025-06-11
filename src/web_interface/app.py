@@ -130,7 +130,7 @@ class CameraManager:
                                 self.clients.remove(client)
                 except Exception as e:
                     logger.error(f"Error sending frame: {e}")
-            await asyncio.sleep(0.033)  # ~30 FPS
+            await asyncio.sleep(0.033)
 
     def add_client(self, websocket):
         self.clients.append(websocket)
@@ -321,11 +321,8 @@ async def start_controller(request: Request):
         if request.method == "POST":
             data = await request.json()
             if data and isinstance(data, dict):
-                # Update mode if provided
                 if "mode" in data:
                     control_manager.set_mode(data["mode"])
-                
-                # Update car type if provided
                 if "car_type" in data:
                     control_manager.set_car_type(data["car_type"])
     except Exception as e:
