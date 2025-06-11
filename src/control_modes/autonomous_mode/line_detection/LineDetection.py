@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from src.control_modes.autonomous_mode.line_detection.LineProcessor import clusterLines, combineLines, getLines
 
-enable_debug = False
+enable_debug = True
 
 
 class LineFollowingNavigation:
@@ -16,8 +16,13 @@ class LineFollowingNavigation:
         self.prev_right_line = None
         self.crosswalk_detected = False
         self.crosswalk_confidence = 0
+        self.left_min_bound = 0
+        self.left_max_bound = 250
+        self.right_min_bound = self.width - 250
+        self.right_max_bound = self.width
         self.frame_count = 0
-        print(f"Initialized with width={self.width}, height={self.height}, scale={self.scale}, mode='{self.mode}'")
+
+
 
     def set_mode(self, mode):
         """Set the driving mode."""
@@ -31,13 +36,10 @@ class LineFollowingNavigation:
         # Convert to grayscale
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-        # Apply Gaussian blur to reduce noise
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
 
-        # High threshold for white lines only
         _, binary = cv2.threshold(blurred, 170, 255, cv2.THRESH_BINARY)
 
-        # Create ROI mask - focus on bottom half where road lines are
         height, width = img.shape[:2]
         mask = np.zeros_like(binary)
 
@@ -81,7 +83,6 @@ class LineFollowingNavigation:
 
     def filter_lines(self, lines, img_shape):
         """Filter lines by angle and position, excluding crosswalk lines."""
-        print(f"filter_lines getting lines?", lines is not None)
         if lines is None:
             return [], []
 
@@ -94,9 +95,6 @@ class LineFollowingNavigation:
         self.crosswalk_detected = is_crosswalk
         self.crosswalk_confidence = crosswalk_conf
 
-        if is_crosswalk:
-            print(f"Crosswalk detected with confidence {crosswalk_conf}% - filtering out vertical lines")
-
         for line in lines:
             x1, y1, x2, y2 = line[0]
 
@@ -106,51 +104,28 @@ class LineFollowingNavigation:
             else:
                 angle = np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi
 
-            print(
-                f"filter_lines: Line detected with angle {angle:.2f} degrees, coordinates: ({x1}, {y1}) to ({x2}, {y2})")
 
             # Enhanced filtering to exclude crosswalk lines
             # Skip vertical lines (crosswalk stripes) - more aggressive filtering
-            if abs(angle) > 75:  # Skip lines that are too vertical (crosswalk stripes)
-                print(f"filter_lines: Skipping vertical line (potential crosswalk stripe) with angle {angle:.2f}")
+            if abs(angle) > 85:  # Skip lines that are too vertical (crosswalk stripes)
                 continue
 
             # Filter by angle - lane lines should be diagonal but not too steep
-            if abs(angle) < 15:  # Skip nearly horizontal lines
-                print(f"filter_lines: Skipping horizontal line with angle {angle:.2f}")
+            if abs(angle) < 5:  # Skip nearly horizontal lines
                 continue
 
             # Calculate line length
             length = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
             if length < 30:  # Skip very short lines
-                print(f"filter_lines: Skipping short line with length {length:.2f}")
                 continue
-
-            # If crosswalk detected, be more strict about line selection
-            if is_crosswalk:
-                # Only accept lines that are clearly diagonal (lane lines)
-                if abs(angle) < 25 or abs(angle) > 65:
-                    print(f"filter_lines: Crosswalk mode - skipping line with angle {angle:.2f}")
-                    continue
-
-                # Require longer lines when crosswalk is present
-                if length < 50:
-                    print(f"filter_lines: Crosswalk mode - skipping shorter line with length {length:.2f}")
-                    continue
 
             # Determine if line is on left or right side
             center_x = (x1 + x2) / 2
-
-            print(f"The center X: {center_x:.2f}, width / 2: {width / 2:.2f}, angle: {angle:.2f} degrees")
-            print(
-                f"filter_lines: Line center at {center_x:.2f}, width center at {width / 2:.2f} - angle {angle:.2f} degrees")
 
             if center_x < width / 2 and angle < 0:  # Left side, negative slope (line going up-left to down-right)
                 left_lines.append([x1, y1, x2, y2])
             elif center_x > width / 2 and angle > 0:  # Right side, positive slope (line going up-right to down-left)
                 right_lines.append([x1, y1, x2, y2])
-            else:
-                print(f"filter_lines: Line at center {center_x:.2f} does not match left/right criteria, skipping.")
 
         print(f"Returning {len(left_lines)} left lines and {len(right_lines)} right lines.")
         return left_lines, right_lines
@@ -164,7 +139,6 @@ class LineFollowingNavigation:
     def get_best_line(self, lines):
         """Get the longest/best line from a group."""
         if not lines:
-            print("get_best_line: No lines provided.")
             return None
 
         best_line = None
@@ -178,7 +152,6 @@ class LineFollowingNavigation:
                 max_length = length
                 best_line = line
 
-        print(f"get_best_line: Found best line with length {max_length}: {best_line}")
         return best_line
 
     def extrapolate_line(self, line, img_height, horizon_y=200):
@@ -297,6 +270,48 @@ class LineFollowingNavigation:
 
         return clustered_lines
 
+    def find_point_of_interception(self, lines, img_height=None):
+        """
+        Returns a list of (x, y) points where each line intercepts the bottom of the frame (y = img_height).
+        Accepts a single line [x1, y1, x2, y2] or a list of such lines.
+        """
+        if lines is None or len(lines) == 0:
+            return []
+
+        # Normalize to list of lines
+        if isinstance(lines[0], (int, float)):
+            lines = [lines]
+
+        if img_height is None:
+            img_height = self.height
+
+        interception_points = []
+        for line in lines:
+            x1, y1, x2, y2 = line
+            if y2 == y1:
+                continue  # Skip horizontal lines
+            m = (y2 - y1) / (x2 - x1) if x2 != x1 else None
+            if m is not None:
+                b = y1 - m * x1
+                x_at_bottom = int((img_height - b) / m)
+                interception_points.append((x_at_bottom, img_height))
+            else:
+                interception_points.append((x1, img_height))
+        return interception_points
+
+    def get_lines_in_window(self, intercepting, lines, lower_bound, upper_bound):
+        """
+        Returns the lines whose interception point at the bottom of the frame
+        is within [lower_bound, upper_bound] (inclusive).
+        """
+        result = []
+        for point, line in zip(intercepting, lines):
+            x, _ = point
+            if lower_bound <= x <= upper_bound:
+                result.append(line)
+        return result
+
+
     def processFrame(self, img, horizon_height=280, weight_factor=1, bias=0):
         """Main processing function."""
         if img.shape[1] != self.width or img.shape[0] != self.height:
@@ -304,6 +319,8 @@ class LineFollowingNavigation:
 
         self.frame_count += 1
         visuals = []
+
+        windowed_frame = img.copy()
 
         # Step 1: Detect white lines
         binary = self.detect_white_lines(img)
@@ -313,15 +330,32 @@ class LineFollowingNavigation:
 
         # Step 3: Detect clustered lines (purple lines)
         clustered_lines = self.detect_clustered_lines(raw_lines, img.shape)
-        print(clustered_lines)
 
         # Step 4: Filter and separate left/right lines
         left_lines, right_lines = self.filter_lines(raw_lines, img.shape)
 
-        print(f"Any filtered right lines: {len(right_lines) > 0}, left lines: {len(left_lines) > 0}")
         # Step 5: Get best lines
+
+        intercepts_left = self.find_point_of_interception(left_lines)
+        intercepts_right = self.find_point_of_interception(right_lines)
+
+        left_lines = self.get_lines_in_window(intercepts_left, left_lines, 0, 350)
+        right_lines = self.get_lines_in_window(intercepts_right, right_lines, self.width - 300, self.width)
+
         best_left = self.get_best_line(left_lines)
         best_right = self.get_best_line(right_lines)
+
+        # draw over the new windowed image copy
+        if enable_debug:
+            line_img = windowed_frame
+            if best_left is not None:
+                x1, y1, x2, y2 = best_left
+                cv2.line(line_img, (x1, y1), (x2, y2), (0, 255, 0), 4)
+            if best_right is not None:
+                x1, y1, x2, y2 = best_right
+                cv2.line(line_img, (x1, y1), (x2, y2), (255, 0, 0), 4)
+            if enable_debug:
+                cv2.imshow("5. Best Lines", line_img)
 
         # Step 6: Extrapolate lines
         if best_left is not None:
@@ -374,17 +408,16 @@ class LineFollowingNavigation:
             visuals.extend(target_visuals)
             return target, visuals
 
-        print("No valid lines detected, cannot find target.")
         return None, visuals
 
     def findTarget(self, left_lines, right_lines, horizon_height, img, left_weight=1, right_weight=1, weight_factor=1,
                    bias=0, draw=1):
         visuals = []
-        print("Finding target...")
+        # print("Finding target...")
 
         # If crosswalk is detected, prioritize going straight
         if self.crosswalk_detected:
-            print(f"Crosswalk detected - maintaining straight course")
+            # print(f"Crosswalk detected - maintaining straight course")
             target = self.width / 2  # Go straight through crosswalk
 
             visuals.append({
@@ -409,7 +442,7 @@ class LineFollowingNavigation:
 
         # Rest of the original findTarget method...
         if not left_lines and not right_lines:
-            print("No left || or right detected")
+            # print("No left || or right detected")
             return None, visuals
 
         elif not right_lines:
@@ -443,7 +476,7 @@ class LineFollowingNavigation:
             x1l, y1l, x2l, y2l = left_lines[0]
             x1r, y1r, x2r, y2r = right_lines[0]
 
-            print(f"Target: Left Line: ({x1l}, {y1l}) to ({x2l}, {y2l}), Right Line: ({x1r}, {y1r}) to ({x2r}, {y2r})")
+            # print(f"Target: Left Line: ({x1l}, {y1l}) to ({x2l}, {y2l}), Right Line: ({x1r}, {y1r}) to ({x2r}, {y2r})")
             # Target is midpoint between the two lines at horizon
             target = (x1l + x1r) / 2
 
@@ -490,7 +523,7 @@ class LineFollowingNavigation:
         if mid_point is None:
             mid_point = self.width / 2
 
-        max_angle = 45.0
+        max_angle = 30.0
 
         # Mode-specific steering calculations
         if self.mode == 'left_parallel':
@@ -555,12 +588,12 @@ class LineFollowingNavigation:
                 offset = target - mid_point
                 steering_angle = (offset / (self.width / 2)) * max_angle
             else:
-                print("No lines detected and no target provided, defaulting to straight.")
+                # print("No lines detected and no target provided, defaulting to straight.")
                 return 0.0
 
         # Limit steering angle
         steering_angle = max(min(steering_angle, max_angle), -max_angle)
-        print(f"Steering angle calculated: {steering_angle:.2f} degrees")
+        # print(f"Steering angle calculated: {steering_angle:.2f} degrees")
         return steering_angle
 
     def calculateSpeed(self, steering_angle, base_speed=100):
@@ -657,8 +690,11 @@ class LineFollowingNavigation:
         _steering_angle = steering_angle if steering_angle is not None else 0.0
         _speed = speed if speed is not None else 0.0
 
+        rad_steer = _steering_angle * np.pi / 180
+        print("Steering angle in radians:", rad_steer)
+        rad_steer = max(min(rad_steer, 1.25), -1.25)
         text = (f"Mode: {_mode}, target: {_target:.2f}, "
-                f"steering angle: {_steering_angle:.2f}, speed: {_speed:.2f}")
+                f"steering angle: {rad_steer}, speed: {_speed:.2f}")
         if target is not None:
             visuals.append({
                 'type': 'text',
@@ -747,13 +783,12 @@ class LineFollowingNavigation:
 
         is_crosswalk = crosswalk_confidence > 40  # Threshold for crosswalk detection
 
-        if enable_debug and is_crosswalk:
-            print(f"CROSSWALK DETECTED! Confidence: {crosswalk_confidence}%, Vertical lines: {len(vertical_lines)}")
 
         return is_crosswalk, crosswalk_confidence
 
 
     def process(self, frame, base_speed=100, draw=1):
         """Process a single frame and return the results."""
+        # print(f"Width: {self.width}, Height: {self.height}, Scale: {self.scale}, Mode: {self.mode}")
         steering_angle, speed, visuals = self.run(frame, base_speed, draw)
         return steering_angle, speed, visuals

@@ -1,4 +1,5 @@
 import logging
+import time
 
 from src.control_modes.autonomous_mode.localization.lane_detection import LaneDetector
 #import multiprocessing as mp
@@ -42,6 +43,7 @@ class AutonomousMode(IControlMode):
 
         self.car_seen_counter = 0
         self.car_on_left = False
+        self.ignore_line_detection_until = 0
 
         self.nav = LineFollowingNavigation(width=LineDetectionDims.WIDTH, height=LineDetectionDims.HEIGHT,mode="normal") # 'normal', 'left_parallel', 'right_parallel'
         self.object_detector = ObjectDetection(weights_path='assets/v5_model.pt', input_source='video')
@@ -62,6 +64,7 @@ class AutonomousMode(IControlMode):
         # Localization
         self.localizer = localization.Localizer()
         self.lane_detector = LaneDetector()
+        self.saw_ped_at = None
 
         self.vehicle_handler = VehicleHandler(weights_path='assets/v5_model.pt', input_source='video', localizer=self.localizer, can_controller=self.can_controller, car_type = self.car_type)
         self.pedestrian_handler = PedestrianHandler(weights_path='assets/v5_model.pt', input_source='video', can_controller=self.can_controller, car_type = self.car_type)
@@ -139,7 +142,14 @@ class AutonomousMode(IControlMode):
                 elif pedestrian_in_range and self.pedestrian_handler.pedestrian_crossed() is False:
                     logging.info("Saw person, stopping car")
                     self.pedestrian_handler.main(front_view)
+                    if self.pedestrian_handler.pedestrian_crossed():
+                        self.ignore_line_detection_until = time.time() + 5
                 else:
+                    now = time.time()
+                    if now < self.ignore_line_detection_until:
+                        logging.info("Ignoring line detection, going straight for 5 seconds after pedestrian")
+                        steering_angle = 0
+
                     logging.info(f"Speed: {speed}, Steering: {steering_angle}")
                     logging.info(f"X: {self.localizer.x} Y: {self.localizer.y} THETA: {self.localizer.theta}")
                     self.data_logger_manager.add_location_data(self.localizer.x, self.localizer.y, self.localizer.theta)
@@ -152,8 +162,9 @@ class AutonomousMode(IControlMode):
                         self.can_controller.set_break(0)
                         self.can_controller.set_kart_gearbox(KartGearBox.forward)
                         self.can_controller.set_throttle(30)
-                        normalized_steering = normalize_steering(steering_angle, 1.25)
-                        self.can_controller.set_steering(normalized_steering)
+                        rad_steer = steering_angle * np.pi / 180
+                        rad_steer = max((min(rad_steer, -1.25)), 1.25)
+                        self.can_controller.set_steering(rad_steer)
         except Exception as e:
             logging.error(f"Error in autonomous mode: {e}")
         finally:
