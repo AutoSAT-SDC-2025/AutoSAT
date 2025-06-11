@@ -161,10 +161,6 @@ class AutonomousMode(IControlMode):
 
     def stop(self) -> None:
         logging.info("Stopping autonomous mode.")
-        self.camera_controller.disable_cameras()
-        self.camera_controller = None
-        #self.localization_process.terminate()
-        #self.localization_process.join()
         if self.car_type == CarType.hunter:
             self.can_controller.set_control_mode(HunterControlMode.idle_mode)
         else:
