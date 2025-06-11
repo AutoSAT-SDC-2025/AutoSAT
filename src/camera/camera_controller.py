@@ -5,7 +5,7 @@ import numpy as np
 from typing import Dict
 import cv2
 import os
-from src.car_variables import CameraResolution, LineDetectionDims
+from src.car_variables import CameraResolution, LineDetectionDims, CarType
 from src.multi_camera_calibration import CalibrationData, RenderDistance
 from src.util.video import get_camera_config, validate_camera_config
 
@@ -15,23 +15,42 @@ class CameraController:
         self.__cameras: Dict[str, cv2.VideoCapture] = dict()
         self.__camera_frames = {}
         self.__enable = False
+        self.__car_type = None
         
         try:
             self.__camera_paths = get_camera_config()
             if validate_camera_config(self.__camera_paths):
                 self.__using_fallback = False
-                self.__calibration_data = CalibrationData(
-                    path="assets/calibration/latest.npz",
-                    input_shape=(1920, 1080),
-                    output_shape=(LineDetectionDims.WIDTH, LineDetectionDims.HEIGHT),
-                    render_distance=RenderDistance(front=12.0, sides=6.0)
-                )
+                if self.__car_type is CarType.kart:
+                    self.__calibration_data = CalibrationData(
+                        path="assets/calibration/kart_calib.npz",
+                        input_shape=(1920, 1080),
+                        output_shape=(LineDetectionDims.WIDTH, LineDetectionDims.HEIGHT),
+                        render_distance=RenderDistance(front=12.0, sides=6.0)
+                    )
+                elif self.__car_type is CarType.hunter:
+                    self.__calibration_data = CalibrationData(
+                        path="assets/calibration/hunter_calib.npz",
+                        input_shape=(1920, 1080),
+                        output_shape=(LineDetectionDims.WIDTH, LineDetectionDims.HEIGHT),
+                        render_distance=RenderDistance(front=12.0, sides=6.0)
+                    )
+                else:
+                    self.__calibration_data = CalibrationData(
+                        path="assets/calibration/kart_calib.npz",
+                        input_shape=(1920, 1080),
+                        output_shape=(LineDetectionDims.WIDTH, LineDetectionDims.HEIGHT),
+                        render_distance=RenderDistance(front=12.0, sides=6.0)
+                    )
             else:
                 raise RuntimeError("No cameras connected")
         except Exception as e:
             logging.warning(f"No cameras available: {e}. Using recorded session images.")
             self.__using_fallback = True
             self.__setup_fallback_images()
+
+    def set_car_type(self, car_type: CarType):
+        self.__car_type = car_type
 
     def __setup_fallback_images(self):
         self.__image_paths = {"front": [], "left": [], "right": [], "stitched": [], "topdown": []}
