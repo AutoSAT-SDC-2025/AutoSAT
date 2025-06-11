@@ -92,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let frameCount = 0;
     let lastFrameTime = Date.now();
 
-    function connectCamera() {
+    async function connectCamera() {
         if (cameraSocket) {
             cameraSocket.close();
         }
@@ -107,79 +107,88 @@ document.addEventListener('DOMContentLoaded', () => {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws/camera`;
 
-        cameraSocket = new WebSocket(wsUrl);
+        console.log(`Connecting to camera WebSocket at ${wsUrl}`);
+        
+        try {
+            cameraSocket = new WebSocket(wsUrl);
 
-        cameraSocket.onopen = () => {
-            console.log('Camera WebSocket connected');
-            state.cameraConnected = true;
-            connectionIndicator.className = 'status-indicator connected';
-            connectionText.textContent = 'Connected';
+            cameraSocket.onopen = () => {
+                console.log('Camera WebSocket connected successfully');
+                state.cameraConnected = true;
+                connectionIndicator.className = 'status-indicator connected';
+                connectionText.textContent = 'Connected';
 
-            startPingInterval(cameraSocket);
-        };
+                startPingInterval(cameraSocket);
+            };
 
-        cameraSocket.onmessage = (event) => {
-            try {
-                if (event.data === 'pong') return;
+            cameraSocket.onmessage = (event) => {
+                try {
+                    if (event.data === 'pong') return;
 
-                const data = JSON.parse(event.data);
+                    const data = JSON.parse(event.data);
 
-                if (data.type === 'frame') {
+                    if (data.type === 'frame') {
+                        cameraPlaceholder.classList.add('hidden');
+                        cameraFeed.classList.remove('hidden');
+                        cameraFeed.src = `data:image/jpeg;base64,${data.data}`;
 
-                    cameraPlaceholder.classList.add('hidden');
-                    cameraFeed.classList.remove('hidden');
+                        if (data.view_mode) {
+                            updateCameraViewButtons(data.view_mode);
+                        }
 
-                    cameraFeed.src = `data:image/jpeg;base64,${data.data}`;
+                        frameCount++;
+                        const now = Date.now();
+                        if (now - lastFrameTime >= 1000) {
+                            const frameRate = Math.round(frameCount * 1000 / (now - lastFrameTime));
+                            fpsElement.textContent = frameRate;
 
-                    if (data.view_mode) {
-                        updateCameraViewButtons(data.view_mode);
-                    }
+                            frameCount = 0;
+                            lastFrameTime = now;
+                        }
 
-                    frameCount++;
-                    const now = Date.now();
-                    if (now - lastFrameTime >= 1000) {
-                        const frameRate = Math.round(frameCount * 1000 / (now - lastFrameTime));
-                        fpsElement.textContent = frameRate;
-
-                        frameCount = 0;
-                        lastFrameTime = now;
-                    }
-
-                    if (!cameraFeed.naturalWidth) {
-                        cameraFeed.onload = () => {
+                        if (!cameraFeed.naturalWidth) {
+                            cameraFeed.onload = () => {
+                                frameSize.textContent = `${cameraFeed.naturalWidth} x ${cameraFeed.naturalHeight}`;
+                            };
+                        } else {
                             frameSize.textContent = `${cameraFeed.naturalWidth} x ${cameraFeed.naturalHeight}`;
-                        };
-                    } else {
-                        frameSize.textContent = `${cameraFeed.naturalWidth} x ${cameraFeed.naturalHeight}`;
+                        }
                     }
+                    else if (data.type === 'view_changed') {
+                        updateCameraViewButtons(data.view_mode);
+                        showAlert(`Camera view changed to ${data.view_mode}`, true);
+                    }
+                } catch (error) {
+                    console.error('Error processing camera message:', error);
                 }
-                else if (data.type === 'view_changed') {
-                    updateCameraViewButtons(data.view_mode);
-                    showAlert(`Camera view changed to ${data.view_mode}`, true);
-                }
-            } catch (error) {
-                console.error('Error processing camera message:', error);
-            }
-        };
+            };
 
-        cameraSocket.onclose = () => {
-            console.log('Camera WebSocket disconnected');
-            state.cameraConnected = false;
-            connectionIndicator.className = 'status-indicator disconnected';
-            connectionText.textContent = 'Disconnected';
+            cameraSocket.onclose = (event) => {
+                console.log('Camera WebSocket disconnected', event);
+                state.cameraConnected = false;
+                connectionIndicator.className = 'status-indicator disconnected';
+                connectionText.textContent = 'Disconnected';
 
-            cameraPlaceholder.textContent = "Camera disconnected. Attempting to reconnect...";
-            cameraPlaceholder.classList.remove('hidden');
-            cameraFeed.classList.add('hidden');
+                cameraPlaceholder.textContent = "Camera disconnected. Attempting to reconnect...";
+                cameraPlaceholder.classList.remove('hidden');
+                cameraFeed.classList.add('hidden');
 
-            setTimeout(connectCamera, 5000);
-        };
+                setTimeout(connectCamera, 5000);
+            };
 
-        cameraSocket.onerror = (error) => {
-            console.error('Camera WebSocket error:', error);
-            connectionIndicator.className = 'status-indicator disconnected';
+            cameraSocket.onerror = (error) => {
+                console.error('Camera WebSocket error:', error);
+                connectionIndicator.className = 'status-indicator disconnected';
+                connectionText.textContent = 'Connection error';
+                
+                cameraPlaceholder.textContent = "Camera connection failed. Retrying...";
+            };
+
+        } catch (error) {
+            console.error('Error creating camera WebSocket:', error);
             connectionText.textContent = 'Connection error';
-        };
+            setTimeout(connectCamera, 5000);
+        }
     }
 
     function connectCAN() {
@@ -213,10 +222,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (event.data === 'pong') {
                     return;
                 }
-                
-                const message = JSON.parse(event.data);
-                
-                processCAN(message);
+
+                const messageData = JSON.parse(event.data);
+
+                processCAN(messageData);
 
                 state.messageCount++;
                 canMessageCount.textContent = state.messageCount;
@@ -246,101 +255,103 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("Processing CAN message:", message);
         
         try {
-            const { timestamp, type, id, data } = JSON.parse(message);
-
-            const date = new Date(timestamp);
-            const formattedTime = `Last update: ${date.toLocaleTimeString()}`;
-
-            const logEntry = document.createElement('div');
-            logEntry.className = 'log-entry';
-            logEntry.innerHTML = `<span class="timestamp">${timestamp}</span> <span class="id">${id}</span> <span class="type">${type}</span>`;
-            
-            const keys = highlightKeys[type] || [];
-            
-            if (Object.keys(data).length > 0) {
-                logEntry.innerHTML += ' | ';
-                logEntry.innerHTML += Object.entries(data)
-                    .map(([key, value]) => {
-                        const highlighted = keys.includes(key) ? 'highlighted' : '';
-                        return `<span class="key">${key}:</span> <span class="${highlighted}">${value}</span>`;
-                    })
-                    .join(' | ');
+            let parsedMessage;
+            if (typeof message === 'string') {
+                parsedMessage = JSON.parse(message);
+            } else {
+                parsedMessage = message;
             }
             
-            canLog.appendChild(logEntry);
+            const { timestamp, type, id, data } = parsedMessage;
+            const messageDate = new Date(timestamp);
+            const formattedTime = `Last update: ${messageDate.toLocaleTimeString()}`;
+            
+            if (canLog) {
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry';
+                logEntry.innerHTML = `<span class="timestamp">${timestamp}</span> <span class="id">${id}</span> <span class="type">${type}</span>`;
+                
+                const keys = highlightKeys[type] || [];
+                
+                if (Object.keys(data).length > 0) {
+                    logEntry.innerHTML += ' | ';
+                    logEntry.innerHTML += Object.entries(data)
+                        .map(([key, value]) => {
+                            const highlighted = keys.includes(key) ? 'highlighted' : '';
+                            return `<span class="key">${key}:</span> <span class="${highlighted}">${value}</span>`;
+                        })
+                        .join(' | ');
+                }
+                
+                canLog.appendChild(logEntry);
+                
+                while (canLog.childElementCount > 100) {
+                    canLog.removeChild(canLog.firstChild);
+                }
 
-            while (canLog.childElementCount > 100) {
-                canLog.removeChild(canLog.firstChild);
+                canLog.scrollTop = canLog.scrollHeight;
             }
-
-            canLog.scrollTop = canLog.scrollHeight;
 
             switch (type) {
                 case 'hunter_movement':
-                    hunterSpeed.textContent = data.speed;
-                    hunterSteering.textContent = data.steering;
-                    hunterMovementTimestamp.textContent = formattedTime;
+                    if (hunterSpeed) hunterSpeed.textContent = data.speed || '0.00';
+                    if (hunterSteering) hunterSteering.textContent = data.steering || '0.00';
+                    if (hunterMovementTimestamp) hunterMovementTimestamp.textContent = formattedTime;
                     break;
                 case 'hunter_status':
-                    hunterBody.textContent = data.body_status;
-                    hunterControl.textContent = data.control_mode;
-                    hunterBrake.textContent = data.brake_status;
-                    hunterStatusTimestamp.textContent = formattedTime;
+                    if (hunterBody) hunterBody.textContent = data.body_status || 'Unknown';
+                    if (hunterControl) hunterControl.textContent = data.control_mode || 'Unknown';
+                    if (hunterBrake) hunterBrake.textContent = data.brake_status || 'Unknown';
+                    if (hunterStatusTimestamp) hunterStatusTimestamp.textContent = formattedTime;
                     break;
                 case 'kart_speed':
-                    kartSpeed.textContent = data.speed;
-                    kartMotionTimestamp.textContent = formattedTime;
+                    if (kartSpeed) kartSpeed.textContent = data.speed || '0.00';
+                    if (kartMotionTimestamp) kartMotionTimestamp.textContent = formattedTime;
                     break;
                 case 'kart_steering':
-                    kartSteering.textContent = data.steering_raw;
-                    kartMotionTimestamp.textContent = formattedTime;
+                    if (kartSteering) kartSteering.textContent = data.steering_raw || '0';
+                    if (kartMotionTimestamp) kartMotionTimestamp.textContent = formattedTime;
                     break;
                 case 'kart_throttle':
-                    kartThrottle.textContent = data.throttle_voltage;
-                    kartBraking.textContent = data.braking;
-                    kartGear.textContent = data.gear;
-                    kartControlsTimestamp.textContent = formattedTime;
+                    if (kartThrottle) kartThrottle.textContent = data.throttle_voltage || '0';
+                    if (kartBraking) kartBraking.textContent = data.braking || 'Not Braking';
+                    if (kartGear) kartGear.textContent = data.gear || 'N';
+                    if (kartControlsTimestamp) kartControlsTimestamp.textContent = formattedTime;
                     break;
                 case 'kart_breaking':
-                    kartBreakCurrent.textContent = data.current_pot;
-                    kartBreakTarget.textContent = data.target_pot;
-                    kartBreakDirection.textContent = data.direction;
-                    kartBreakStatus.textContent = data.error;
-                    kartBreakingTimestamp.textContent = formattedTime;
+                    if (kartBreakCurrent) kartBreakCurrent.textContent = data.current_pot || '0';
+                    if (kartBreakTarget) kartBreakTarget.textContent = data.target_pot || '0';
+                    if (kartBreakDirection) kartBreakDirection.textContent = data.direction || 'Unknown';
+                    if (kartBreakStatus) kartBreakStatus.textContent = data.error || 'Unknown';
+                    if (kartBreakingTimestamp) kartBreakingTimestamp.textContent = formattedTime;
                     break;
-
                 case 'hunter_movement_control':
                     updateControlCard('hunter-movement-control', 'Hunter Movement Command', {
                         'Command Speed': data.speed !== undefined ? data.speed.toFixed(2) + ' m/s' : 'N/A',
                         'Command Steering': data.steering !== undefined ? data.steering.toFixed(2) + ' rad' : 'N/A'
                     });
                     break;
-                    
                 case 'hunter_control_mode':
                     updateControlCard('hunter-control-mode', 'Hunter Control Mode', {
                         'Mode': data.mode || 'Unknown'
                     });
                     break;
-                    
                 case 'hunter_parking_control':
                     updateControlCard('hunter-parking-control', 'Hunter Parking', {
                         'Parking': data.engaged ? 'Engaged' : 'Disengaged'
                     });
                     break;
-                    
                 case 'kart_steering_control':
                     updateControlCard('kart-steering-control', 'Kart Steering Command', {
                         'Command Angle': data.steering_angle !== undefined ? data.steering_angle.toFixed(2) : 'N/A'
                     });
                     break;
-                    
                 case 'kart_throttle_control':
                     updateControlCard('kart-throttle-control', 'Kart Throttle Command', {
                         'Command Throttle': data.throttle !== undefined ? data.throttle : 'N/A',
                         'Gear': data.gear || 'N/A'
                     });
                     break;
-                    
                 case 'kart_break_control':
                     updateControlCard('kart-break-control', 'Kart Brake Command', {
                         'Command Brake': data.brake_value !== undefined ? data.brake_value : 'N/A'
@@ -349,10 +360,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             state.messageCount++;
-            canMessageCount.textContent = state.messageCount;
+            if (canMessageCount) canMessageCount.textContent = state.messageCount;
             
         } catch (error) {
             console.error('Error processing CAN message:', error);
+            console.error('Raw message:', message);
+            console.error('Message type:', typeof message);
         }
     }
 
@@ -622,58 +635,59 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    [frontViewBtn, leftViewBtn, rightViewBtn, topdownViewBtn, stitchedViewBtn, linesViewBtn, objectsViewBtn].forEach(btn => {
-        btn.addEventListener('click', () => {
-            const view = btn.id.replace('-view', '');
-            if (cameraSocket && cameraSocket.readyState === WebSocket.OPEN) {
-                cameraSocket.send(`view:${view}`);
-            }
-        });
-    });
-
-    loggerToggle.addEventListener('change', async () => {
-        await toggleLogger();
-    });
-
     function updateCameraViewButtons(activeView) {
-
-        const viewButtons = [frontViewBtn, leftViewBtn, rightViewBtn, topdownViewBtn, stitchedViewBtn, linesViewBtn, objectsViewBtn];
+        const viewButtons = [frontViewBtn, leftViewBtn, rightViewBtn, topdownViewBtn, stitchedViewBtn, linesViewBtn, objectsViewBtn].filter(btn => btn !== null);
         viewButtons.forEach(btn => btn.classList.remove('active'));
 
         let viewName = 'Unknown';
         switch (activeView) {
             case 'front':
-                frontViewBtn.classList.add('active');
+                if (frontViewBtn) frontViewBtn.classList.add('active');
                 viewName = 'Front';
                 break;
             case 'left':
-                leftViewBtn.classList.add('active');
+                if (leftViewBtn) leftViewBtn.classList.add('active');
                 viewName = 'Left';
                 break;
             case 'right':
-                rightViewBtn.classList.add('active');
+                if (rightViewBtn) rightViewBtn.classList.add('active');
                 viewName = 'Right';
                 break;
             case 'topdown':
-                topdownViewBtn.classList.add('active');
+                if (topdownViewBtn) topdownViewBtn.classList.add('active');
                 viewName = 'Top-Down';
                 break;
             case 'stitched':
-                stitchedViewBtn.classList.add('active');
+                if (stitchedViewBtn) stitchedViewBtn.classList.add('active');
                 viewName = 'Stitched';
                 break;
             case 'lines':
-                linesViewBtn.classList.add('active');
+                if (linesViewBtn) linesViewBtn.classList.add('active');
                 viewName = 'Lines';
                 break;
             case 'objects':
-                objectsViewBtn.classList.add('active');
+                if (objectsViewBtn) objectsViewBtn.classList.add('active');
                 viewName = 'Objects';
                 break;
         }
         
-        currentView.textContent = viewName;
+        if (currentView) currentView.textContent = viewName;
     }
+
+    [frontViewBtn, leftViewBtn, rightViewBtn, topdownViewBtn, stitchedViewBtn, linesViewBtn, objectsViewBtn].forEach(btn => {
+        if (btn) {
+            btn.addEventListener('click', () => {
+                const view = btn.id.replace('-view', '');
+                if (cameraSocket && cameraSocket.readyState === WebSocket.OPEN) {
+                    cameraSocket.send(`view:${view}`);
+                }
+            });
+        }
+    });
+
+    loggerToggle.addEventListener('change', async () => {
+        await toggleLogger();
+    });
 
     async function init() {
         connectCamera();
