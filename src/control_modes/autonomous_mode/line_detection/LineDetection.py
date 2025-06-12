@@ -592,7 +592,8 @@ class LineFollowingNavigation:
                 return 0.0
 
         # Limit steering angle
-        steering_angle = max(min(steering_angle, max_angle), -max_angle)
+        # steering_angle = max(min(steering_angle, max_angle), -max_angle)
+
         # print(f"Steering angle calculated: {steering_angle:.2f} degrees")
         return steering_angle
 
