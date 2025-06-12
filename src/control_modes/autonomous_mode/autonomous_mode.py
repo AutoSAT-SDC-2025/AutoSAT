@@ -123,7 +123,7 @@ class AutonomousMode(IControlMode):
                     elif obj_class == "Person" and distance <= 3:
                         pedestrian_in_range = True
                         self.saw_pedestrian = True
-                    if saw_red_light and distance <= 3:
+                    if saw_red_light and distance <= 1:
                         red_light_in_range = True
 
                 self.renderer.render_lines(stitched)
