@@ -110,3 +110,10 @@ def transform_camera_image():
     cv2.imshow("Top-Down", topdown)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+
+
+def main():
+    calibrate_connected_cameras()
+
+if __name__ == "__main__":
+    main()
