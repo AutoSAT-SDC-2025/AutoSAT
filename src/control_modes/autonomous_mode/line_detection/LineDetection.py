@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from src.control_modes.autonomous_mode.line_detection.LineProcessor import clusterLines, combineLines, getLines
 
-enable_debug = True
+enable_debug = False
 
 
 class LineFollowingNavigation:

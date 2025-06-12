@@ -159,6 +159,9 @@ class VehicleHandler:
             new_steering_angle = round(steering_angle * 576 / 90)
 
             return max(round(min(new_steering_angle, 576), -576))
+        else:
+            new_steering_angle = round(steering_angle * (1.25 / 30))
+            return max(min(new_steering_angle, 1.25), -1.25)
 
     def set_steering_angle(self, angle_difference, steering_angle=None):
         angle_in_degrees = math.degrees(angle_difference)
