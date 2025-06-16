@@ -1,4 +1,13 @@
+/**
+ * AutoSAT Control Panel JavaScript
+ * 
+ * Handles WebSocket connections, UI interactions, and real-time data display
+ * for vehicle control and monitoring interface. Manages camera streaming,
+ * CAN data processing, control mode switching, and data logging functionality.
+ */
+
 document.addEventListener('DOMContentLoaded', () => {
+    // Camera UI elements
     const cameraFeed = document.getElementById('camera-feed');
     const cameraPlaceholder = document.getElementById('camera-placeholder');
     const connectionIndicator = document.getElementById('connection-indicator');
@@ -6,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const frameSize = document.getElementById('frame-size');
     const fpsElement = document.getElementById('fps');
 
+    // Control panel elements
     const manualModeBtn = document.getElementById('manual-mode');
     const autonomousModeBtn = document.getElementById('autonomous-mode');
     const kartTypeBtn = document.getElementById('kart-type');
@@ -17,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const runningStatus = document.getElementById('running-status');
     const alertBox = document.getElementById('alert');
 
+    // CAN data monitoring elements
     const canConnectionIndicator = document.getElementById('can-connection-indicator');
     const canConnectionText = document.getElementById('can-connection-text');
     const canMessageCount = document.getElementById('can-message-count');
@@ -24,6 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const hunterDataSection = document.getElementById('hunter-data');
     const kartDataSection = document.getElementById('kart-data');
 
+    // Hunter vehicle data elements
     const hunterSpeed = document.getElementById('hunter-speed');
     const hunterSteering = document.getElementById('hunter-steering');
     const hunterBody = document.getElementById('hunter-body');
@@ -32,6 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const hunterMovementTimestamp = document.getElementById('hunter-movement-timestamp');
     const hunterStatusTimestamp = document.getElementById('hunter-status-timestamp');
 
+    // Kart vehicle data elements
     const kartSpeed = document.getElementById('kart-speed');
     const kartSteering = document.getElementById('kart-steering');
     const kartThrottle = document.getElementById('kart-throttle');
@@ -45,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const kartControlsTimestamp = document.getElementById('kart-controls-timestamp');
     const kartBreakingTimestamp = document.getElementById('kart-breaking-timestamp');
 
+    // Camera view switching elements
     const frontViewBtn = document.getElementById('front-view');
     const leftViewBtn = document.getElementById('left-view');
     const rightViewBtn = document.getElementById('right-view');
@@ -54,23 +68,32 @@ document.addEventListener('DOMContentLoaded', () => {
     const linesViewBtn = document.getElementById('lines-view');
     const objectsViewBtn = document.getElementById('objects-view');
 
+    // Data logger elements
     const loggerToggle = document.getElementById('logger-toggle');
     const loggerStatus = document.getElementById('logger-status');
     const loggerInfo = document.getElementById('logger-info');
     const logPath = document.getElementById('log-path');
 
+    /**
+     * Application state management
+     * Tracks current vehicle control mode, connection status, and logging state
+     */
     const state = {
-        mode: null,
-        carType: null,
-        running: false,
-        cameraConnected: false,
-        canConnected: false,
-        messageCount: 0,
-        loggerEnabled: false,
-        loggerAvailable: false,
-        loggerPath: null
+        mode: null,                // Current control mode (manual/autonomous)
+        carType: null,             // Vehicle type (kart/hunter)
+        running: false,            // Whether controller is active
+        cameraConnected: false,    // Camera WebSocket connection status
+        canConnected: false,       // CAN WebSocket connection status
+        messageCount: 0,           // Total CAN messages received
+        loggerEnabled: false,      // Data logging active status
+        loggerAvailable: false,    // Data logger availability
+        loggerPath: null           // Current log session directory
     };
 
+    /**
+     * Defines which CAN message fields to highlight in the UI
+     * Maps message types to arrays of important field names
+     */
     const highlightKeys = {
         hunter_movement: ['speed', 'steering'],
         hunter_status: ['body_status', 'control_mode', 'brake_status'],
@@ -86,12 +109,18 @@ document.addEventListener('DOMContentLoaded', () => {
         kart_break_control: ['brake_value']
     };
 
+    // WebSocket connections
     let cameraSocket = null;
     let canSocket = null;
 
+    // Frame rate calculation variables
     let frameCount = 0;
     let lastFrameTime = Date.now();
 
+    /**
+     * Establish WebSocket connection to camera streaming service
+     * Handles connection setup, frame reception, and automatic reconnection
+     */
     async function connectCamera() {
         if (cameraSocket) {
             cameraSocket.close();
@@ -128,6 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const data = JSON.parse(event.data);
 
                     if (data.type === 'frame') {
+                        // Display received camera frame
                         cameraPlaceholder.classList.add('hidden');
                         cameraFeed.classList.remove('hidden');
                         cameraFeed.src = `data:image/jpeg;base64,${data.data}`;
@@ -136,6 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             updateCameraViewButtons(data.view_mode);
                         }
 
+                        // Calculate and display frame rate
                         frameCount++;
                         const now = Date.now();
                         if (now - lastFrameTime >= 1000) {
@@ -146,6 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             lastFrameTime = now;
                         }
 
+                        // Update frame size information
                         if (!cameraFeed.naturalWidth) {
                             cameraFeed.onload = () => {
                                 frameSize.textContent = `${cameraFeed.naturalWidth} x ${cameraFeed.naturalHeight}`;
@@ -173,6 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 cameraPlaceholder.classList.remove('hidden');
                 cameraFeed.classList.add('hidden');
 
+                // Automatic reconnection after 5 seconds
                 setTimeout(connectCamera, 5000);
             };
 
@@ -191,6 +224,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    /**
+     * Establish WebSocket connection to CAN data streaming service
+     * Handles real-time CAN message reception and processing
+     */
     function connectCAN() {
         if (canSocket) {
             canSocket.close();
@@ -241,6 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
             canConnectionIndicator.className = 'status-indicator disconnected';
             canConnectionText.textContent = 'Disconnected';
 
+            // Automatic reconnection after 5 seconds
             setTimeout(connectCAN, 5000);
         };
         
@@ -251,6 +289,11 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
+    /**
+     * Process incoming CAN messages and update UI elements
+     * Handles both vehicle feedback and control command messages
+     * @param {Object} message - Parsed CAN message with type and data fields
+     */
     function processCAN(message) {
         console.log("Processing CAN message:", message);
         
@@ -266,6 +309,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const messageDate = new Date(timestamp);
             const formattedTime = `Last update: ${messageDate.toLocaleTimeString()}`;
             
+            // Add message to scrolling log
             if (canLog) {
                 const logEntry = document.createElement('div');
                 logEntry.className = 'log-entry';
@@ -285,6 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 canLog.appendChild(logEntry);
                 
+                // Limit log to 100 entries for performance
                 while (canLog.childElementCount > 100) {
                     canLog.removeChild(canLog.firstChild);
                 }
@@ -292,6 +337,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 canLog.scrollTop = canLog.scrollHeight;
             }
 
+            // Update vehicle-specific data displays
             switch (type) {
                 case 'hunter_movement':
                     if (hunterSpeed) hunterSpeed.textContent = data.speed || '0.00';
@@ -369,6 +415,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    /**
+     * Create or update control command display cards
+     * @param {string} id - Card element ID
+     * @param {string} title - Card title text
+     * @param {Object} values - Key-value pairs to display
+     */
     function updateControlCard(id, title, values) {
         let card = document.getElementById(id);
         
@@ -395,6 +447,10 @@ document.addEventListener('DOMContentLoaded', () => {
         card.innerHTML = cardContent;
     }
 
+    /**
+     * Start periodic ping messages to maintain WebSocket connection
+     * @param {WebSocket} socket - WebSocket connection to ping
+     */
     function startPingInterval(socket) {
         const pingInterval = setInterval(() => {
             if (socket && socket.readyState === WebSocket.OPEN) {
@@ -405,6 +461,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 5000);
     }
 
+    /**
+     * Display temporary alert message to user
+     * @param {string} message - Alert message text
+     * @param {boolean} isSuccess - Whether this is a success (green) or error (red) alert
+     */
     function showAlert(message, isSuccess = false) {
         alertBox.textContent = message;
         alertBox.className = isSuccess ? 'alert success' : 'alert';
@@ -414,23 +475,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 3000);
     }
 
+    /**
+     * Update button states and UI based on current application state
+     * Handles button activation, enabling/disabling, and data section visibility
+     */
     function updateButtonStates() {
-
+        // Update mode selection buttons
         manualModeBtn.className = state.mode === 'manual' ? 'btn active' : 'btn';
         autonomousModeBtn.className = state.mode === 'autonomous' ? 'btn active' : 'btn';
 
+        // Update vehicle type selection buttons
         kartTypeBtn.className = state.carType === 'kart' ? 'btn active' : 'btn';
         hunterTypeBtn.className = state.carType === 'hunter' ? 'btn active' : 'btn';
 
+        // Update start/stop button states
         startBtn.disabled = state.running || !state.mode || !state.carType;
         startBtn.className = state.running || !state.mode || !state.carType ? 'btn btn-success btn-disabled' : 'btn btn-success';
         stopBtn.disabled = !state.running;
         stopBtn.className = !state.running ? 'btn btn-danger btn-disabled' : 'btn btn-danger';
 
+        // Update status display
         currentMode.textContent = state.mode ? state.mode.charAt(0).toUpperCase() + state.mode.slice(1) : 'Not set';
         currentCarType.textContent = state.carType ? state.carType.charAt(0).toUpperCase() + state.carType.slice(1) : 'Not set';
         runningStatus.textContent = state.running ? 'Yes' : 'No';
 
+        // Show appropriate vehicle data section
         if (state.carType === 'hunter') {
             hunterDataSection.classList.remove('hidden');
             kartDataSection.classList.add('hidden');
@@ -443,6 +512,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    /**
+     * Make API request to FastAPI backend
+     * @param {string} endpoint - API endpoint path (without /api/ prefix)
+     * @param {Object} data - Request body data for POST requests
+     * @param {string} forceMethod - Optional method override (GET/POST)
+     * @returns {Object|null} API response object or null on error
+     */
     async function apiRequest(endpoint, data, forceMethod = null) {
         try {
 
@@ -488,6 +564,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    /**
+     * Fetch current system status from API and update UI
+     * Gets controller state, mode, vehicle type, and logger status
+     */
     async function getStatus() {
         const response = await apiRequest('status');
         if (response && response.success) {
@@ -510,6 +590,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    /**
+     * Update data logger UI elements based on current state
+     * Shows/hides logger controls and displays current log path
+     */
     function updateLoggerUI() {
         if (!state.loggerAvailable) {
             loggerToggle.disabled = true;
@@ -530,6 +614,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    /**
+     * Toggle data logger on/off via API
+     * Handles UI feedback during operation
+     */
     async function toggleLogger() {
         const enabled = loggerToggle.checked;
         const endpoint = enabled ? 'logger/start' : 'logger/stop';
@@ -544,6 +632,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.loggerPath = response.status.log_dir;
             showAlert(response.message, true);
         } else {
+            // Revert toggle state on failure
             loggerToggle.checked = state.loggerEnabled;
             showAlert(`Logger operation failed: ${response ? response.message : 'Unknown error'}`, false);
         }
@@ -551,6 +640,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateLoggerUI();
     }
 
+    // Event listeners for control mode selection
     manualModeBtn.addEventListener('click', async () => {
         if (state.mode === 'manual') return;
 
@@ -575,6 +665,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Event listeners for vehicle type selection
     kartTypeBtn.addEventListener('click', async () => {
         if (state.carType === 'kart') return;
 
@@ -599,6 +690,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Event listeners for start/stop control
     startBtn.addEventListener('click', async () => {
         if (state.running || !state.mode || !state.carType) return;
 
@@ -635,6 +727,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    /**
+     * Update camera view button states to reflect active view
+     * @param {string} activeView - Currently active camera view mode
+     */
     function updateCameraViewButtons(activeView) {
         const viewButtons = [frontViewBtn, leftViewBtn, rightViewBtn, topdownViewBtn, stitchedViewBtn, linesViewBtn, objectsViewBtn].filter(btn => btn !== null);
         viewButtons.forEach(btn => btn.classList.remove('active'));
@@ -674,6 +770,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentView) currentView.textContent = viewName;
     }
 
+    // Event listeners for camera view switching
     [frontViewBtn, leftViewBtn, rightViewBtn, topdownViewBtn, stitchedViewBtn, linesViewBtn, objectsViewBtn].forEach(btn => {
         if (btn) {
             btn.addEventListener('click', () => {
@@ -685,10 +782,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Event listener for data logger toggle
     loggerToggle.addEventListener('change', async () => {
         await toggleLogger();
     });
 
+    /**
+     * Initialize the application
+     * Connects WebSockets and loads initial system status
+     */
     async function init() {
         connectCamera();
         connectCAN();
@@ -698,5 +800,6 @@ document.addEventListener('DOMContentLoaded', () => {
         updateButtonStates();
     }
 
+    // Start the application when DOM is ready
     init();
 });
