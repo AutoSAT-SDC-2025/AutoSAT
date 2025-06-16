@@ -1,3 +1,11 @@
+"""
+CAN message decoder module for AutoSAT vehicle communication.
+
+This module provides classes and functions to decode incoming CAN messages from Hunter
+and Kart vehicles, converting raw byte data into structured data objects and broadcasting
+them to the web interface for real-time monitoring.
+"""
+
 import struct
 import json
 from datetime import datetime
@@ -10,11 +18,19 @@ from ..web_interface.websocket_manager import sync_broadcast_can_json
 
 @dataclass
 class CanMessageData:
+    """
+    Base class for CAN message data structures.
+    
+    Provides common functionality for converting dataclass fields to dictionaries
+    for JSON serialization and web interface communication.
+    """
     def to_dict(self) -> Dict[str, Any]:
+        """Convert dataclass fields to dictionary for JSON serialization."""
         return {key: getattr(self, key) for key in self.__annotations__}
 
 @dataclass
 class HunterMovementData(CanMessageData):
+    """Hunter vehicle movement feedback data (speed and steering)."""
     speed: float = 0.0
     steering: float = 0.0
 
@@ -23,6 +39,7 @@ class HunterMovementData(CanMessageData):
 
 @dataclass
 class HunterStatusData(CanMessageData):
+    """Hunter vehicle status feedback data (body, control mode, brake status)."""
     body_status: str = "Unknown"
     control_mode: str = "Unknown"
     brake_status: str = "Unknown"
@@ -32,6 +49,7 @@ class HunterStatusData(CanMessageData):
 
 @dataclass
 class KartSteeringData(CanMessageData):
+    """Kart steering sensor data (raw steering position)."""
     steering_raw: int = 0
 
     def __str__(self) -> str:
@@ -39,6 +57,7 @@ class KartSteeringData(CanMessageData):
 
 @dataclass
 class KartBreakingData(CanMessageData):
+    """Kart braking system feedback data (position, target, direction, status)."""
     current_pot: int = 0
     target_pot: int = 0
     direction: str = "Unknown"
@@ -50,6 +69,7 @@ class KartBreakingData(CanMessageData):
 
 @dataclass
 class KartThrottleData(CanMessageData):
+    """Kart throttle and drivetrain status data."""
     throttle_voltage: int = 0
     braking: str = "Not Braking"
     gear: str = "N"
@@ -60,6 +80,7 @@ class KartThrottleData(CanMessageData):
 
 @dataclass
 class KartSpeedData(CanMessageData):
+    """Kart speed sensor data."""
     speed: float = 0.0
     speed_hmh: int = 0
 
@@ -68,6 +89,7 @@ class KartSpeedData(CanMessageData):
 
 @dataclass
 class HunterMovementControlData(CanMessageData):
+    """Hunter movement control commands sent to vehicle."""
     speed: float = 0.0
     steering: float = 0.0
 
@@ -76,6 +98,7 @@ class HunterMovementControlData(CanMessageData):
 
 @dataclass
 class HunterControlModeData(CanMessageData):
+    """Hunter control mode commands."""
     mode: str = "Unknown"
 
     def __str__(self) -> str:
@@ -83,6 +106,7 @@ class HunterControlModeData(CanMessageData):
 
 @dataclass
 class HunterParkingControlData(CanMessageData):
+    """Hunter parking brake control commands."""
     engaged: bool = False
 
     def __str__(self) -> str:
@@ -90,6 +114,7 @@ class HunterParkingControlData(CanMessageData):
 
 @dataclass
 class KartSteeringControlData(CanMessageData):
+    """Kart steering control commands."""
     steering_angle: float = 0.0
 
     def __str__(self) -> str:
@@ -97,6 +122,7 @@ class KartSteeringControlData(CanMessageData):
 
 @dataclass
 class KartThrottleControlData(CanMessageData):
+    """Kart throttle and gear control commands."""
     throttle: int = 0
     gear: str = "N"
 
@@ -105,6 +131,7 @@ class KartThrottleControlData(CanMessageData):
 
 @dataclass
 class KartBreakControlData(CanMessageData):
+    """Kart brake control commands."""
     brake_value: int = 0
 
     def __str__(self) -> str:
@@ -112,6 +139,12 @@ class KartBreakControlData(CanMessageData):
 
 @dataclass
 class DecodedMessage:
+    """
+    Complete decoded CAN message with metadata and parsed data.
+    
+    Contains timestamp, message ID, raw data, message type, and structured
+    data object. Used for logging, web interface display, and debugging.
+    """
     timestamp: str
     id: str
     raw_id: int
@@ -124,6 +157,7 @@ class DecodedMessage:
                 Dict[str, Any]]
 
     def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
         result = {
             "timestamp": self.timestamp,
             "type": self.type,
@@ -133,6 +167,7 @@ class DecodedMessage:
         return result
 
     def to_json(self) -> str:
+        """Convert to JSON string for web interface transmission."""
         return json.dumps(self.to_dict())
 
     def __str__(self) -> str:
@@ -140,6 +175,14 @@ class DecodedMessage:
         return f"[{self.timestamp}] ID: {self.id} | {data_str}"
 
 class CanDecoder:
+    """
+    CAN message decoder for Hunter and Kart vehicles.
+    
+    Provides static methods to decode raw CAN messages into structured data objects.
+    Supports both feedback messages (from vehicle) and control messages (to vehicle).
+    Handles message parsing, data conversion, and error handling.
+    """
+
     BODY_STATUS_MAP: ClassVar[Dict[int, str]] = {
         0x00: "Normal",
         0x01: "Warning",
@@ -160,6 +203,18 @@ class CanDecoder:
 
     @staticmethod
     def decode_message(message: Message) -> DecodedMessage:
+        """
+        Decode a raw CAN message into structured data.
+        
+        Parses message based on arbitration ID and converts raw bytes into
+        appropriate data structures for Hunter or Kart vehicles.
+        
+        Args:
+            message: Raw CAN message from bus
+            
+        Returns:
+            DecodedMessage with parsed data and metadata
+        """
         timestamp = datetime.fromtimestamp(message.timestamp).isoformat()
         message_id = message.arbitration_id
         hex_data = ' '.join([f"{b:02X}" for b in message.data])
@@ -318,11 +373,25 @@ class CanDecoder:
             data=data
         )
 
+
 def broadcast_can_message(message: Message) -> None:
+    """
+    Decode CAN message and broadcast to web interface.
+    
+    Used as CAN bus listener to automatically process and forward
+    messages to connected web clients for real-time monitoring.
+    """
     decoded = CanDecoder.decode_message(message)
     sync_broadcast_can_json(decoded.to_json())
 
+
 def print_can_messages(message: Message) -> None:
+    """
+    Print CAN messages to console (currently disabled).
+    
+    Alternative listener function for debugging CAN traffic.
+    Currently commented out to reduce console spam.
+    """
     # decoded = CanDecoder.decode_message(message)
     # print(decoded)
     pass
