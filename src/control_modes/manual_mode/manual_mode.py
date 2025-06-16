@@ -1,3 +1,10 @@
+"""
+Manual control mode for direct gamepad operation of vehicles.
+
+Provides real-time vehicle control through Xbox gamepad input, supporting
+both Hunter and Kart vehicle types with their respective control schemes.
+"""
+
 import logging
 import time
 
@@ -11,8 +18,20 @@ from ...misc import calculate_steering, calculate_throttle, controller_break_val
 
 
 class ManualMode(IControlMode):
+    """
+    Manual control mode implementation for gamepad-driven vehicle operation.
+    
+    Translates Xbox gamepad inputs to vehicle control commands through CAN bus.
+    Supports Hunter (combined steering/throttle) and Kart (separate controls) modes.
+    """
 
     def __init__(self, car_type: CarType):
+        """
+        Initialize manual mode with gamepad and CAN controller setup.
+        
+        Args:
+            car_type: Vehicle type (Hunter or Kart) for control configuration
+        """
         self.__running = True
         self.can_bus = connect_to_can_interface(0)
         self.car_type = car_type
@@ -43,28 +62,48 @@ class ManualMode(IControlMode):
             self.gamepad = None
 
     def handle_steering(self, value):
-        """Callback for steering axis changes"""
+        """
+        Process steering joystick input.
+        
+        Args:
+            value: Left joystick X-axis value (-1.0 to 1.0)
+        """
         self.steering = calculate_steering(value, self.car_type)
 
     def handle_throttle(self, value):
-        """Callback for throttle axis changes"""
+        """
+        Process throttle joystick input.
+        
+        Args:
+            value: Right joystick Y-axis value (-1.0 to 1.0)
+        """
         self.throttle = calculate_throttle(value, self.car_type)
 
     def handle_park(self, value):
-        """Callback for parking trigger"""
+        """
+        Process parking brake trigger input.
+        
+        Args:
+            value: Trigger value (-1.0 to 1.0, threshold at -0.8)
+        """
         trigger_threshold = -0.8
         self.park = True if value > trigger_threshold else False
 
     def handle_forward(self):
-        """Callback for forward axis changes"""
+        """Set gear to forward for Kart vehicles."""
         self.gear = KartGearBox.forward
 
     def handle_reverse(self):
-        """Callback for backward axis changes"""
+        """Set gear to reverse for Kart vehicles."""
         self.gear = KartGearBox.backward
 
     def start(self) -> None:
-        """Start manual mode."""
+        """
+        Start manual control mode main loop.
+        
+        Continuously sends control commands based on gamepad input until
+        disconnection or exit button press.
+        """
         logging.info("Starting manual mode...")
         try:
             self.can_controller.start()
@@ -85,7 +124,11 @@ class ManualMode(IControlMode):
             self.stop()
 
     def stop(self) -> None:
-        """Stop manual mode."""
+        """
+        Stop manual mode and cleanup resources.
+        
+        Sets vehicle to safe state, disconnects gamepad, and shuts down CAN controller.
+        """
         if self.gamepad and self.gamepad.isConnected():
             self.gamepad.disconnect()
         if self.car_type == CarType.hunter:
@@ -98,5 +141,6 @@ class ManualMode(IControlMode):
         logging.info("Exiting... \nStopping manual mode")
 
     def stop_manual_mode(self):
+        """Handle exit button press from gamepad."""
         logging.info("Exit button pressed. Exiting manual mode.")
         self.__running = False
