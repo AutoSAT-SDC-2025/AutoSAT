@@ -165,7 +165,8 @@ class AutonomousMode(IControlMode):
                         self.can_controller.set_kart_gearbox(KartGearBox.forward)
                         self.can_controller.set_throttle(30)
                         rad_steer = steering_angle * np.pi / 180
-                        # rad_steer = max((min(rad_steer, -1.25)), 1.25)
+                        # rad_steer = max((min(rad_steer, -1.25)), 1.25) ##fun fact this line right here is reversed i will keep it as a reminder of how not to limit values between 2 values :)
+                        rad_steer = max((min(rad_steer, 1.25)), -1.25) ## correct way to limit a value
                         self.can_controller.set_steering(rad_steer)
         except Exception as e:
             logging.error(f"Error in autonomous mode: {e}")
