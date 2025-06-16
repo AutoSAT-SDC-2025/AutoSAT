@@ -1,3 +1,10 @@
+"""
+Data logging manager for comprehensive vehicle data capture.
+
+Provides multi-threaded logging of CAN messages, camera frames, and location data
+for autonomous vehicle testing and analysis.
+"""
+
 import csv
 import json
 import logging
@@ -12,8 +19,23 @@ from src.camera.camera_controller import CameraController
 from src.can_interface.can_decoder import CanDecoder
 
 class DataLoggerManager:
+    """
+    Manages comprehensive data logging for vehicle testing sessions.
+    
+    Captures CAN messages (raw and decoded), camera frames from all views,
+    and vehicle location data in organized directory structure.
+    """
 
     def __init__(self, camera_controller=None):
+        """
+        Initialize data logger with CAN bus and camera connections.
+        
+        Args:
+            camera_controller: Optional existing camera controller instance
+            
+        Raises:
+            RuntimeError: If CAN bus connection fails
+        """
         try:
             self.can_bus = bus_connection.connect_to_can_interface(0)
         except Exception as e:
@@ -46,12 +68,24 @@ class DataLoggerManager:
         self.location_queue = []
 
     def get_can_message(self):
+        """
+        Receive CAN message from bus with timeout.
+        
+        Raises:
+            RuntimeError: If CAN message reception fails
+        """
         try:
             self.raw_can_message = self.can_bus.recv(0.5)
         except Exception as e:
-            raise RuntimeError(f"Error recieving CAN message: {e}")
+            raise RuntimeError(f"Error receiving CAN message: {e}")
 
     def enable_logger(self):
+        """
+        Start data logging with all threads and create log directory structure.
+        
+        Creates timestamped session directory and starts concurrent logging
+        for CAN data, camera frames, and location data.
+        """
         self.enabled = True
         self.__camera_log_thread = threading.Thread(target=self.__log_camera_frames, daemon=True)
         self.__can_log_thread = threading.Thread(target=self.__log_can_data, daemon=True)
@@ -66,6 +100,12 @@ class DataLoggerManager:
         logging.info("Enabled logger")
 
     def disable_logger(self):
+        """
+        Stop all logging threads and close files safely.
+        
+        Gracefully shuts down logging operations and ensures all data
+        is written to disk before cleanup.
+        """
         self.enabled = False
 
         if self.__can_log_thread and self.__can_log_thread.is_alive():
@@ -92,6 +132,12 @@ class DataLoggerManager:
         logging.info("Disabled logger")
 
     def create_folder_structure(self):
+        """
+        Create organized directory structure for logging session.
+        
+        Creates timestamped session folder with subdirectories for CAN data,
+        images (all camera views), and location data files.
+        """
         session_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")[:-3]
         base_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "logs")
         self.log_dir = os.path.join(base_dir, f"session_{session_timestamp}")
@@ -116,6 +162,14 @@ class DataLoggerManager:
         logging.info(f"Created log directory: {self.log_dir}")
         
     def add_location_data(self, x, y, theta):
+        """
+        Queue location data for logging.
+        
+        Args:
+            x: X coordinate position
+            y: Y coordinate position  
+            theta: Vehicle heading angle
+        """
         if not self.enabled:
             return
 
@@ -123,6 +177,12 @@ class DataLoggerManager:
         self.location_queue.append((timestamp, x, y, theta))
 
     def __log_can_data(self):
+        """
+        Internal thread function for continuous CAN data logging.
+        
+        Logs both raw CAN messages (CSV) and decoded messages (JSON)
+        with timestamps for correlation with other data streams.
+        """
         while self.enabled:
             try:
                 can_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")[:-3]
@@ -131,7 +191,6 @@ class DataLoggerManager:
                 hex_data = ' '.join([f"{b:02X}" for b in self.raw_can_message.data])
                 self.raw_can_writer.writerow([can_timestamp, f"0x{self.raw_can_message.arbitration_id:X}", hex_data])
                 self.raw_can_file.flush()
-
 
                 decoded = self.can_decoder.decode_message(self.raw_can_message)
                 json_obj = decoded.to_dict()
@@ -144,6 +203,12 @@ class DataLoggerManager:
                 logging.error(f"Error logging CAN data: {e}")
 
     def __log_camera_frames(self):
+        """
+        Internal thread function for continuous camera frame logging.
+        
+        Captures and saves timestamped images from all camera views
+        (front, left, right, stitched panoramic, top-down).
+        """
         while self.enabled:
             camera_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")[:-3]
             try:
@@ -184,6 +249,12 @@ class DataLoggerManager:
                 logging.error(f"Error saving top down view: {e}")
                 
     def __log_location_data(self):
+        """
+        Internal thread function for batched location data logging.
+        
+        Processes queued location entries and writes them to CSV
+        with timestamp, position, and heading information.
+        """
         while self.enabled:
             try:
                 location_batch = self.location_queue.copy()
