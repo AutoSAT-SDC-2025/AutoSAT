@@ -1,4 +1,3 @@
-python
 class TrafficManager:
     def __init__(self):
         # Distance threshold (in meters) to consider a red traffic light as relevant for stopping
