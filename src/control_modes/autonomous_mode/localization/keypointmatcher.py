@@ -92,7 +92,7 @@ class StarKeyPointMatcher(KeypointMatcher):
         matches = self.matcher.match(des1, des2)
         return matches
 
-    def draw_matches(self, img1, kp1, img2, kp2, matches):
+    def draw_matches(self, img1, kp1, img2, kp2, matches, max_matches=100):
         """
         Draw the matched keypoints between two images
         Parameters:
@@ -104,8 +104,9 @@ class StarKeyPointMatcher(KeypointMatcher):
           Returns:
           numpy.ndarray: The image with the matched keypoints drawn on it.
         """
-        if len(matches) > 100:
-            matches = matches[:100]
+        if len(matches) > max_matches:
+            # matches = matches[:max_matches]
+            matches = np.random.choice(matches, size=max_matches, replace=False)
         img3 = cv2.drawMatches(img1,kp1,img2,kp2,matches,None,flags=2)
         return img3
     
