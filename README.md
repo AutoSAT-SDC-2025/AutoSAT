@@ -47,6 +47,52 @@ This fixes an [old bug](https://forum.nomachine.com/topic/connection-fails-on-he
 ### Why use both?
 Tailscale gets you connected from anywhere, NoMachine gives you full control. Together you can work on the vehicle from your couch, debug issues without being physically there, and access the AutoSAT interface whether you're local or remote.
 
+## How to Use the Program
+
+### Environment Setup
+
+First, install [pyenv](https://github.com/pyenv/pyenv) and [pyenv-virtualenv](https://github.com/pyenv/pyenv-virtualenv) by following the instructions for your OS.
+
+Try running ``pyenv doctor`` to see if the installation was successful.
+
+Then create the python environment:
+
+```bash
+pyenv install 3.12
+pyenv virtualenv 3.12 autosat-env
+pyenv activate autosat-env
+```
+
+Then install the requirements with ``pip install -r requirements.txt``
+
+Finally start the program with ``python -m src.main`` and navigate to http://0.0.0.0:8000 or http://device-ip:8000.
+
+## Remote Working Tools
+
+For working on the vehicle remotely:
+
+### Tailscale
+- **What it does**: Creates a secure network between your laptop and the vehicle computer
+- **Why it's useful**: You don't need to be on the same Wi-Fi network
+- **Quality of life**: Really useful if you change connections often because you don't need to search for the IP of the computer
+- **Bonus**: You can also send files over Tailscale using Taildrop
+- **How to use**: Install on both devices, connect to your tailnet, then use Tailscale IPs to access the web interface
+
+### NoMachine
+- **What it does**: Lets you control the vehicle computer like you're sitting in front of it
+- **Why it's useful**: Full desktop access - keyboard, mouse, screen sharing. Much more responsive than X11 forwarding through SSH
+- **Note**: Optional, but helpful for full remote control
+- **How to use**: Install on the vehicle computer and your laptop, then connect remotely
+- **Headless fix**: If the device doesn't have a monitor plugged in and NoMachine won't connect, try:
+  ```bash
+  sudo systemctl stop display-manager
+  sudo /etc/NX/nxserver --restart
+  ```
+This fixes an [old bug](https://forum.nomachine.com/topic/connection-fails-on-headless-client#post-21783) with headless systems.
+
+### Why use both?
+Tailscale gets you connected from anywhere, NoMachine gives you full control. Together you can work on the vehicle from your couch, debug issues without being physically there, and access the AutoSAT interface whether you're local or remote.
+
 ## Getting bluetooth to work with the controller
 
 [First step](https://wiki.archlinux.org/title/Gamepad#Xbox_Wireless_Controller_/_Xbox_One_Wireless_Controller) is plugging in the controller into a Windows 10/11 pc and downloading the [Xbox Accessories application](https://apps.microsoft.com/store/detail/xbox-accessories/9NBLGGH30XJ3?hl=en-us&gl=us) through the Microsoft Store to update the firmware of the controller.
